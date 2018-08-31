@@ -1,4 +1,4 @@
-# Matlab toolbox for hydraulic fracturing in transversely isotropic porous media
+# FEM package for hydraulic fracturing in transversely isotropic porous media - (Matlab toolbox)
 
 This toolbox has following features
 -  Energy based arc length control for mechanical solver
