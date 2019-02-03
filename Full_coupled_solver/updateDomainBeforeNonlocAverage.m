@@ -1,6 +1,5 @@
-% Written By: Matthew Jon Pais, University of Florida (2010)
-% Website: http://sites.google.com/site/matthewjpais/Home
-% Email: mpais@ufl.edu, matthewjpais@gmail.com
+% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
+% Email: wencheng.jin@gatech.edu
 
 function updateDomainBeforeNonlocAverage(PROP)
 % This function calculates the global stiffness matrix for the desired 
