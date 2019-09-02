@@ -7,7 +7,7 @@ This toolbox has following features
 
 Detailed description is documented in the following paper:
 
-- Jin, Wencheng, and Chloé Arson. "Fluid driven transition from damage to fracture in anisotropic porous media - a multiscale XFEM approach." To be published in Acta Geotechnica.
+- Jin, Wencheng, and Chloé Arson. "Fluid driven transition from damage to fracture in anisotropic porous media - a multiscale XFEM approach." Acta Geotechnica, https://doi.org/10.1007/s11440-019-00813-x.
 
 **Please kindly cite above paper if you used any of the functions or algorithms listed in this Github repository**
 
