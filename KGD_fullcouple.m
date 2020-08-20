@@ -1,6 +1,6 @@
 close all; clear;
 
-PaceParalleltoolbox_r2016b('cores',8)
+% PaceParalleltoolbox_r2016b('cores',8)
 
 global CRACK PROP CONTROL
 
@@ -23,7 +23,8 @@ PROP.internal_length = 0.05;    %m
 PROP.plane_thickness = 1;       %m
 PROP.GI = 90;                  %N/m
 PROP.GII = PROP.GI;                  %N/m
-PROP.sigmaMax = 1e6;              %N/m^2  Pa
+PROP.sigmaMax1 = 1e6;              %N/m^2  Pa
+PROP.sigmaMax2 = 1e6;
 PROP.tauMax = 1e6;              %N/m^2  Pa
 PROP.lambdaN = 0.05;
 PROP.lambdaT = 0.05;
