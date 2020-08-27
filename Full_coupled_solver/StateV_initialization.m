@@ -150,13 +150,14 @@ function  GPInitialization()
   UnorderedNodes = unique(fracxy,'rows');
   backup_UnorderedNodes =UnorderedNodes;
   orderedNodes = [];
-  
-  k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),CRACK(1,:));
+  k = dsearchn(UnorderedNodes,CRACK(1,:));
+%   k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),CRACK(1,:));
   orderedNodes = UnorderedNodes(k,:);
   UnorderedNodes = setdiff(UnorderedNodes,orderedNodes,'rows');
   while (size(UnorderedNodes,1)>2)
       lambda = size(orderedNodes,1);
-      k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),orderedNodes(lambda,:));
+%       k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),orderedNodes(lambda,:));
+      k = dsearchn(UnorderedNodes,orderedNodes(lambda,:));
       orderedNodes =[ orderedNodes;  UnorderedNodes(k,:)];
       UnorderedNodes = setdiff(UnorderedNodes,UnorderedNodes(k,:),'rows');
   end
@@ -226,7 +227,7 @@ function  GPInitialization()
       connec_frac(i,:) = [enrElems(i) sort([node1 node2])];
       slope = xynode(1,:)-xynode(2,:);
       theta = atan(slope(2)/slope(1));
-      frac.GI = sqrt((PROP.G2*cos(theta))^2 + (PROP.G1*sin(theta))^2);                  %N/m
+      frac.GI = sqrt((PROP.GII*cos(theta))^2 + (PROP.GI*sin(theta))^2);                  %N/m
       frac.GII = frac.GI;                  %N/m
       frac.sigmaMax = sqrt((PROP.sigmaMax2*cos(theta))^2 + (PROP.sigmaMax1*sin(theta))^2);              %N/m^2  Pa
       frac.tauMax = frac.sigmaMax;              %N/m^2  Pa
