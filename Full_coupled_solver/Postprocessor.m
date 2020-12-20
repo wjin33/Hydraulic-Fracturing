@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function Postprocessor(STEP,file_name)
 % This function output the all the primary and secondary results of the
@@ -10,22 +11,22 @@ global  PHI PSI XYZ CONNEC NODES STATEV DISPTD CRACK
 
 %Recover the state varibals at the nodes from Gauss Points
 
-psi = full(PSI);
-phi = full(PHI);
+% psi = full(PSI);
+% phi = full(PHI);
 
 DISPTD = full(DISPTD);
 
 npoints=size(XYZ,1);
 ncells=size(CONNEC,1);
-if isempty(psi)
-    psi = zeros(npoints,1);
-    phi = zeros(npoints,1);
-end
+% if isempty(psi)
+%     psi = zeros(npoints,1);
+%     phi = zeros(npoints,1);
+% end
 stress = zeros(npoints,4);
-damage = zeros(npoints,2);
+damage = zeros(npoints,1);
 strain = zeros(npoints,4);
-NLEquivStrain = zeros(npoints,2);
-% Velocity = zeros(npoints,2);
+NLEquivStrain = zeros(npoints,1);
+Velocity = zeros(npoints,2);
 
 
 EnrichElems = enrElem();
@@ -102,9 +103,7 @@ for i=1:npoints
     b_stress3=zeros(3,1);
     b_stress4=zeros(3,1);
     b_damage1 = zeros(3,1);
-    b_damage2 = zeros(3,1);
     b_NLEquivStrain1= zeros(3,1);
-    b_NLEquivStrain2= zeros(3,1);
     b_strain1= zeros(3,1);
     b_strain2= zeros(3,1);
     b_strain4= zeros(3,1);
@@ -122,9 +121,8 @@ for i=1:npoints
             b_stress3 = b_stress3+P'.*STATEV{hElem(j)}{k}.sigma(3,1);
             b_stress4 = b_stress4+P'.*STATEV{hElem(j)}{k}.sigma(4,1);
             b_damage1 = b_damage1+P'.*STATEV{hElem(j)}{k}.damage(1,1);
-            b_damage2 = b_damage2+P'.*STATEV{hElem(j)}{k}.damage(2,1);
             b_NLEquivStrain1 = b_NLEquivStrain1+P'.*STATEV{hElem(j)}{k}.NLEquivStrain(1,1);
-            b_NLEquivStrain2 = b_NLEquivStrain2+P'.*STATEV{hElem(j)}{k}.NLEquivStrain(2,1);
+            % b_NLEquivStrain2 = b_NLEquivStrain2+P'.*STATEV{hElem(j)}{k}.NLEquivStrain(2,1);
             b_strain1 = b_strain1+P'.*STATEV{hElem(j)}{k}.strain(1,1);
             b_strain2 = b_strain2+P'.*STATEV{hElem(j)}{k}.strain(2,1);
             b_strain4 = b_strain4+P'.*STATEV{hElem(j)}{k}.strain(4,1);
@@ -137,9 +135,9 @@ for i=1:npoints
     a_stress3 = A\b_stress3;
     a_stress4 = A\b_stress4;
     a_damage1 = A\b_damage1;
-    a_damage2 = A\b_damage2;
+    % a_damage2 = A\b_damage2;
     a_NLEquivStrain1 = A\b_NLEquivStrain1;
-    a_NLEquivStrain2 = A\b_NLEquivStrain2;
+    % a_NLEquivStrain2 = A\b_NLEquivStrain2;
     a_strain1 = A\b_strain1;
     a_strain2 = A\b_strain2;
     a_strain4 = A\b_strain4;
@@ -153,12 +151,12 @@ for i=1:npoints
     stress(NodeNumber,3)=P*a_stress3;
     stress(NodeNumber,4)=P*a_stress4;
     damage(NodeNumber,1)=P*a_damage1; 
-    damage(NodeNumber,2)=P*a_damage2;
+    % damage(NodeNumber,2)=P*a_damage2;
     strain(NodeNumber,1)=P*a_strain1;
     strain(NodeNumber,2)=P*a_strain2;
     strain(NodeNumber,4)=P*a_strain4;
     NLEquivStrain(NodeNumber,1)=P*a_NLEquivStrain1;
-    NLEquivStrain(NodeNumber,2)=P*a_NLEquivStrain2;
+    % NLEquivStrain(NodeNumber,2)=P*a_NLEquivStrain2;
     Velocity(NodeNumber,1)=P*a_velocity1;
     Velocity(NodeNumber,2)=P*a_velocity2; 
 end
@@ -230,31 +228,34 @@ for i = 1:npoints
     fprintf(fid, '  %8.6e   %8.6e   %8.6e   %8.6e', strain(i,1), strain(i,2), strain(i,3), strain(i,4));
 end 
 fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="2" format="ascii">\n');
+fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="1" format="ascii">\n');
 for i = 1:npoints
-    fprintf(fid, '  %8.6e   %8.6e', damage(i,1), damage(i,2));
+    fprintf(fid, '  %8.6e   %8.6e', damage(i,1));
 end 
 fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="2" format="ascii">\n');
+fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="1" format="ascii">\n');
 for i = 1:npoints
-    fprintf(fid, '  %8.6e   %8.6e', NLEquivStrain(i,1), NLEquivStrain(i,2));
+    fprintf(fid, '  %8.6e   %8.6e', NLEquivStrain(i,1));
 end 
 fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="LS_psi" NumberOfComponents="1" format="ascii">\n');
-for i = 1:npoints
-    fprintf(fid, '  %8.6e', psi(i));
-end 
-fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="LS_phi" NumberOfComponents="1" format="ascii">\n');
-for i = 1:npoints
-    fprintf(fid, '  %8.6e', phi(i));
-end 
-fprintf(fid, ' </DataArray>\n');
+for icrack = 1:size(PHI,1)
+    psi = full(PSI{icrack});
+    phi = full(PHI{icrack});
+    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_psi" NumberOfComponents="1" format="ascii">\n', icrack);
+    for i = 1:npoints
+        fprintf(fid, '  %8.6e', psi(i));
+    end 
+    fprintf(fid, ' </DataArray>\n');
+    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_phi" NumberOfComponents="1" format="ascii">\n', icrack);
+    for i = 1:npoints
+        fprintf(fid, '  %8.6e', phi(i));
+    end 
+    fprintf(fid, ' </DataArray>\n');
+end
 fprintf(fid, '</PointData>\n');
 % fprintf(fid, '<CellData Scalars="" Vectors="" Tensors="" >\n');
 % fprintf(fid, '</CellData>\n');
 fprintf(fid, '</Piece>\n');
-
 
 for i = 1:NELE
 %     Trinodes = zeros(12,2);
@@ -276,12 +277,12 @@ for i = 1:NELE
     localD  = [N1*3-2 N1*3-1 N2*3-2 N2*3-1 N3*3-2 N3*3-1 N4*3-2 N4*3-1];    % Traditional index locations for displacement
     localP  = [N1*3 N2*3 N3*3 N4*3];                                        % Traditional index locations for pressure
                                                                  % Next index location
-
+    crack_number = NN(2,4);
     X1 = XYZ(N1,2); X2 = XYZ(N2,2); X3 = XYZ(N3,2); X4 = XYZ(N4,2);     % Nodal x-coordinates
     Y1 = XYZ(N1,3); Y2 = XYZ(N2,3); Y3 = XYZ(N3,3); Y4 = XYZ(N4,3);     % Nodal y-coordinates
     xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix
     if numel(PSI) == 0, PN = [0 0 0 0]; else
-        PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
+        PN = [ PSI{NN(1,4)}(N1)  PSI{NN(2,4)}(N2)  PSI{NN(3,4)}(N3)  PSI{NN(4,4)}(N4)];                % Nodal crack level set values
     end
     [Trinodes,Trinatural] = subDomain(PN,xyz);                        % Full Heaviside enrichment
     for j = 1:12
@@ -295,12 +296,12 @@ for i = 1:NELE
         Tristress(j,3)=N'*stress([N1 N2 N3 N4]',3);
         Tristress(j,4)=N'*stress([N1 N2 N3 N4]',4);
         Tridamage(j,1)=N'*damage([N1 N2 N3 N4]',1);
-        Tridamage(j,2)=N'*damage([N1 N2 N3 N4]',2);
+        % Tridamage(j,2)=N'*damage([N1 N2 N3 N4]',2);
         Tristrain(j,1)=N'*strain([N1 N2 N3 N4]',1);
         Tristrain(j,2)=N'*strain([N1 N2 N3 N4]',2);
         Tristrain(j,4)=N'*strain([N1 N2 N3 N4]',4);
         TriNLEquivStrain(j,1)=N'*NLEquivStrain([N1 N2 N3 N4]',1);
-        TriNLEquivStrain(j,2)=N'*NLEquivStrain([N1 N2 N3 N4]',2);
+        % TriNLEquivStrain(j,2)=N'*NLEquivStrain([N1 N2 N3 N4]',2);
         TriVelocity(j,1)=N'*Velocity([N1 N2 N3 N4]',1);
         TriVelocity(j,2)=N'*Velocity([N1 N2 N3 N4]',2);
               
@@ -313,9 +314,9 @@ for i = 1:NELE
         iLocD   = 9;
         iLocP   = 5;
         
-        psi_  = N(1)*PSI(N1)+N(2)*PSI(N2)+N(3)*PSI(N3)+N(4)*PSI(N4);        % Psi level set value at current point
+        psi_  = N(1)*PSI{NN(1,4)}(N1)+N(2)*PSI{NN(2,4)}(N2)+N(3)*PSI{NN(3,4)}(N3)+N(4)*PSI{NN(4,4)}(N4);        % Psi level set value at current point
         Tripsi(j,1) = psi_ ;
-        Triphi(j,1) = N(1)*PHI(N1)+N(2)*PHI(N2)+N(3)*PHI(N3)+N(4)*PHI(N4);
+        Triphi(j,1) = N(1)*PHI{NN(1,4)}(N1)+N(2)*PHI{NN(2,4)}(N2)+N(3)*PHI{NN(3,4)}(N3)+N(4)*PHI{NN(4,4)}(N4);
         if ( abs(psi_) < 1e-6 )
             k = ceil(j/3);
             ind = (3*k-2):3*k;
@@ -323,7 +324,7 @@ for i = 1:NELE
             xi = tricenter(1,1); eta = tricenter(1,2);                      % triangle center
             Ncenter  = 1/4*[(1-xi)*(1-eta);(1+xi)*(1-eta);...                     % Shape functions
                       (1+xi)*(1+eta);(1-xi)*(1+eta)];
-            psi_  = Ncenter(1)*PSI(N1)+Ncenter(2)*PSI(N2)+Ncenter(3)*PSI(N3)+Ncenter(4)*PSI(N4); 
+            psi_  = Ncenter(1)*PSI{NN(1,4)}(N1)+Ncenter(2)*PSI{NN(2,4)}(N2)+Ncenter(3)*PSI{NN(3,4)}(N3)+Ncenter(4)*PSI{NN(4,4)}(N4); 
         end
         
         for iN = 1:4
@@ -334,7 +335,7 @@ for i = 1:NELE
                 Nenr(:,(2*index-1):(2*index)) = [ N(iN,1)*H    0;
                                                   0            N(iN,1)*H ];
                 Hgp = abs(psi_);                                        % Heaviside value at current gauss point
-                Hi  = abs(PSI(NN(iN,1)));                                         % Nodal Heaviside value
+                Hi  = abs(PSI{NN(iN,4)}(NN(iN,1)));                                         % Nodal Heaviside value
                 D   = (Hgp-Hi);                                           % Shifted distance value
                 Nb(:,index) = N(iN,1)*D;
                 index = index+1;
@@ -403,22 +404,22 @@ for i = 1:NELE
         fprintf(fid, '  %8.6e   %8.6e   %8.6e   %8.6e', Tristrain(i,1), Tristrain(i,2), Tristrain(i,3), Tristrain(i,4));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="2" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="1" format="ascii">\n');
     for i = 1:12
-        fprintf(fid, '  %8.6e   %8.6e', Tridamage(i,1), Tridamage(i,2));
+        fprintf(fid, '  %8.6e   %8.6e', Tridamage(i,1));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="2" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="1" format="ascii">\n');
     for i = 1:12
-        fprintf(fid, '  %8.6e   %8.6e', TriNLEquivStrain(i,1), TriNLEquivStrain(i,2));
+        fprintf(fid, '  %8.6e   %8.6e', TriNLEquivStrain(i,1));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="LS_psi" NumberOfComponents="1" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_psi" NumberOfComponents="1" format="ascii">\n', crack_number);
     for i = 1:12
         fprintf(fid, '  %8.6e', Tripsi(i));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="LS_phi" NumberOfComponents="1" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_phi" NumberOfComponents="1" format="ascii">\n', crack_number);
     for i = 1:12
         fprintf(fid, '  %8.6e', Triphi(i));
     end 
@@ -432,9 +433,12 @@ fclose(fid);
 
 filename = strcat(file_name,'_Fracture.txt');
 fid = fopen(filename, 'w');
-m=size(CRACK,1);
-for i=1:m
-    fprintf(fid, '  %8.6e   %8.6e ', CRACK(i,1),CRACK(i,2));
+for icrack=1:size(CRACK,1)
+    m=size(CRACK{icrack},1);
+    for i=1:m
+        fprintf(fid, '  %8.6e   %8.6e ', CRACK{icrack}(i,1),CRACK{icrack}(i,2));
+        fprintf(fid, '\n');
+    end
     fprintf(fid, '\n');
 end
 fclose(fid);

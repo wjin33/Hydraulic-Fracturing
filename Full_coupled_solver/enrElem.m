@@ -1,6 +1,6 @@
-% Written By: Matthew Jon Pais, University of Florida (2009)
-% Website: http://sites.google.com/site/matthewjpais/Home
-% Email: mpais@ufl.edu, matthewjpais@gmail.com
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [enrElem] = enrElem
 % This function finds the enriched elements.
@@ -13,7 +13,6 @@ global CONNEC NODES
     [~,~,c2]    = intersect(I,CONNEC(:,3)');                                % Find elements with crack tip enrichment
     [~,~,c3]    = intersect(I,CONNEC(:,4)');                                % Find elements with crack tip enrichment
     [~,~,c4]    = intersect(I,CONNEC(:,5)');                                % Find elements with crack tip enrichment
-    
     enrElem    = [];                                                       % Elements fully enriched
     tipelement = [];
     candidate = unique([c1; c2; c3; c4;]);
@@ -37,7 +36,5 @@ global CONNEC NODES
 %             end
 %         end
     end
-
     enrElem = [enrElem; tipelement];
-     
 end

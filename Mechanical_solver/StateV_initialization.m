@@ -5,8 +5,6 @@ function StateV_initialization(PROP)	% Initialize elastic history dependent vari
 %%
   global STATEV CONNEC NODES ELECENTER XYZ
   %
-  eqeps_1t = PROP.eqeps_1t;
-  eqeps_2t = PROP.eqeps_2t;
   NE = size(CONNEC, 1);
   STATEV=cell(1,NE);
   ELECENTER = zeros(NE,2);
@@ -16,12 +14,13 @@ function StateV_initialization(PROP)	% Initialize elastic history dependent vari
   history.true_coodinates = [0; 0];
   history.sigma = [0; 0; 0; 0;];
   history.strain = [0; 0; 0; 0;];
-  history.damage = [0; 0];
-  history.kappa = [eqeps_1t; eqeps_2t];
-  history.EquivStrain = [0; 0];
-  history.NLEquivStrain = [0; 0];
+  history.damage = [0];
+  history.kappa = [PROP.eps_cr];
+  history.EquivStrain = [];
+  history.NLEquivStrain = [];
   history.nonlocalTable = [];
   history.volume = 0;
+  history.B=0;
 %   history.fluidVelocity = [0; 0];
   %
 
@@ -54,7 +53,7 @@ function  GPInitialization()
 % This function calculates the global stiffness matrix for the desired 
 % discontinuities defined by the user supplied input.
 
-  global CONNEC NODES PSI XYZ STATEV connec_frac xyz_frac statev_frac CRACK
+  global CONNEC NODES PSI XYZ STATEV connec_frac xyz_frac statev_frac CRACK PROP
 
   fracxy = [];
   enrElems = [];
@@ -71,23 +70,29 @@ function  GPInitialization()
           % Traditional element
           X1 = XYZ(N1,2); X2 = XYZ(N2,2); X3 = XYZ(N3,2); X4 = XYZ(N4,2); % Nodal x-coordinates
           Y1 = XYZ(N1,3); Y2 = XYZ(N2,3); Y3 = XYZ(N3,3); Y4 = XYZ(N4,3); % Nodal y-coordinates     
-          xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix   
-        
+          xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix    
+          lc= ((max(xyz(:,1))-min(xyz(:,1))) + (max(xyz(:,2))-min(xyz(:,2))))/2;   
+          element_volume = polyarea(xyz(:,1),xyz(:,2))*PROP.plane_thickness;
           [gp,gw] = gauss(2,'QUAD');
           for ig = 1:length(gp)
-              xi = gp(ig,1); eta = gp(ig,2);                                % Gauss points
+              xi = gp(ig,1); eta = gp(ig,2);                           % Gauss points
+             [~, detJ] = Shape_Function(xi, eta, xyz);% Gauss points
               STATEV{iElem}{ig}.natural_coodinates = [xi;eta];
               N = 1/4*[(1-xi)*(1-eta)   (1+xi)*(1-eta)  (1+xi)*(1+eta)  (1-xi)*(1+eta)];          % Shape functions
               STATEV{iElem}{ig}.true_coodinates = [N*xyz]';
               STATEV{iElem}{ig}.gauss_weight = gw(ig,1);
-          end   
+              STATEV{iElem}{ig}.volume = detJ*gw(ig,1)*PROP.plane_thickness;
+              g_f = (PROP.GI/lc)*STATEV{iElem}{ig}.volume/element_volume;
+              STATEV{iElem}{ig}.B= PROP.sigmaMax/(g_f - PROP.sigmaMax^2/2/PROP.E);
+          end
         
       elseif HEN > 0                                                                 % Enriched element
         
           X1 = XYZ(N1,2); X2 = XYZ(N2,2); X3 = XYZ(N3,2); X4 = XYZ(N4,2);     % Nodal x-coordinates
           Y1 = XYZ(N1,3); Y2 = XYZ(N2,3); Y3 = XYZ(N3,3); Y4 = XYZ(N4,3);     % Nodal y-coordinates
           xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix
-
+          lc= ((max(xyz(:,1))-min(xyz(:,1))) + (max(xyz(:,2))-min(xyz(:,2))))/2;   
+          element_volume = polyarea(xyz(:,1),xyz(:,2))*PROP.plane_thickness;
           if HEN == 4                                                         % Fully enriched element
               if numel(PSI) == 0, PN = [0 0 0 0]; else
                   PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
@@ -98,17 +103,21 @@ function  GPInitialization()
           else                                                                % Partially enriched element
               [gp,gw] = gauss(2,'QUAD');
           end
-
           for ig = 1:length(gp)
               xi = gp(ig,1); eta = gp(ig,2);                                    % Gauss points\
-            
+              [~, detJ] = Shape_Function(xi, eta, xyz);% Gauss points
               STATEV{iElem}{ig}.natural_coodinates = [xi;eta];
               N = 1/4*[(1-xi)*(1-eta)   (1+xi)*(1-eta)  (1+xi)*(1+eta)  (1-xi)*(1+eta)];          % Shape functions
               STATEV{iElem}{ig}.true_coodinates = [N*xyz]';
               STATEV{iElem}{ig}.gauss_weight = gw(ig,1);
+              STATEV{iElem}{ig}.volume = detJ*gw(ig,1)*PROP.plane_thickness;
+              g_f = (PROP.GI/lc)*STATEV{iElem}{ig}.volume/element_volume;
+              STATEV{iElem}{ig}.B= PROP.sigmaMax/(g_f - PROP.sigmaMax^2/2/PROP.E);
           end
       end
   end
+  
+%   return;
   
   frac.natural_coodinates = 0;
   frac.gauss_weight = 0;
@@ -241,4 +250,23 @@ function  GPInitialization()
   end
 
 
+end
+
+function [Nxy, detJ] = Shape_Function(xi, eta, Elxy)
+%******************************************************************************
+% Compute shape function, derivatives, and determinant of 4 Node plane element
+%******************************************************************************
+%%
+
+ Nxi  = 1/4*[-(1-eta)   1-eta  1+eta  -(1+eta)];          % Derivative of shape functions with respect to x
+ Neta = 1/4*[-(1-xi)  -(1+xi)  1+xi       1-xi];          % Derivative of shape functions with respect to y
+                
+ Jacobi = [Nxi;Neta;]*Elxy;
+ 
+ detJ = det(Jacobi);
+
+ InvJacobi = Jacobi\eye(2);
+ 
+ Nxy = InvJacobi*[Nxi;Neta;];
+ 
 end

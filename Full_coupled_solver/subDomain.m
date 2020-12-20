@@ -1,7 +1,6 @@
-% Original version of subDomain code written by Nguyen Vinh Phu (2006)
-% Written By: Matthew Jon Pais, University of Florida (2010)
-% Website: http://sites.google.com/site/matthewjpais/Home
-% Email: mpais@ufl.edu, matthewjpais@gmail.com
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [gp,gw,J,cracknode] = subDomain(npt,psi,xyz)
 % This function subdivides enriched elements and determines the guass 

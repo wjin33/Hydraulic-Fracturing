@@ -45,7 +45,7 @@ function  [Enrichedcell]=GPRecovery(iElem,nodes)
   history.strain = [0; 0; 0; 0;];
   history.damage = [0; 0];
   history.kappa = [0; 0];
-  history.EquivStrain = [0; 0];
+  history.EquivStrain = [0];
   history.nonlocalTable = [];
   history.volume = 0;                                     % Define the global K
   

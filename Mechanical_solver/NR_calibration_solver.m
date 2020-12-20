@@ -1,7 +1,7 @@
 % Written By: Wencheng Jin, Georgia Institute of Technology (2018)
 % Email: wencheng.jin@gatech.edu
 
-function NR_calibration_solver(CONTROL,PROP,EXTFORCE,EXTDISP)
+function NR_calibration_solver(CONTROL,PROP,EXTFORCE,EXTDISP,file_name)
 %***********************************************************************
 % MAIN PROGRAM FOR HYPERELASTIC/ELASTOPLASTIC ANALYSIS
 %***********************************************************************
@@ -24,9 +24,6 @@ DISPDD = sparse(NEQ,1);
 % Initialize global stiffness K and residual vector F
 GKF = sparse(NEQ,NEQ);
 FORCE = sparse(NEQ,1);
-
-file_name = input('Enter job name: ','s');
-% file_name = 'debug';
 
 ITRA = CONTROL.Niter;
 TOL = CONTROL.TOL;   
@@ -71,10 +68,10 @@ while(FLAG10 == 1)					% Solution has been converged, start next increment
       % Update stresses and history variables
       UPDATE=true; 
       StateV_output(PROP,UPDATE);
-      Postprocessor(ISTEP,file_name); 
+      Postprocessor(ISTEP,EXTDISP,file_name); 
   end  % Converged result, need to output
   %
-  if (ISTEP  >= 1)
+  if (ISTEP  >= 10000)
       Propagation = true;
       while (Propagation)
         Propagation=PropagationLaw();
@@ -150,10 +147,13 @@ while(FLAG10 == 1)					% Solution has been converged, start next increment
       end
   
       % Assemble K and F, become very complex, need to know different part 
-      updateDomainBeforeNonlocAverage(PROP);       % Calculate the local equivalent strain and store it in STATEV for nonlocal averaging later               
-      UPDATE=false; LTAN=true; NLTAN=true;        % Update the residual/internal force vector as well as the stiffness matrix
-%       stiffnessMatrix(PROP,LTAN,NLTAN,UPDATE);
-      stiffnessMatrix_parallel(PROP,LTAN,NLTAN,NEQ)
+      if PROP.nonlocal
+        updateDomainBeforeNonlocAverage(PROP);       % Calculate the local equivalent strain and store it in STATEV for nonlocal averaging later               
+      end
+%       updateDomainBeforeNonlocAverage(PROP);       % Calculate the local equivalent strain and store it in STATEV for nonlocal averaging later               
+      UPDATE=false; LTAN=true; NLTAN=false;        % Update the residual/internal force vector as well as the stiffness matrix
+      stiffnessMatrix(PROP,LTAN,NLTAN,UPDATE);
+%       stiffnessMatrix_parallel(PROP,LTAN,NLTAN,NEQ)
       
       %
       % Check convergence

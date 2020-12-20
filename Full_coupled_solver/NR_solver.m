@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function NR_solver(CONTROL,PROP,EXTFORCE,EXTDISP,EXTPRESSURE,EXTFlUX)
 %***********************************************************************
@@ -26,10 +27,11 @@ DISPDD = sparse(NEQ,1);
 % Initialize global stiffness K and residual vector F
 GKF = sparse(NEQ,NEQ);
 FORCE = sparse(NEQ,1);
-heavDOF = nnz(NODES(:,2));                                                % Define the number of Heavi DOF
-if heavDOF > 0, heaviNodes;     end
+% heavDOF = nnz(NODES(:,2));                                                % Define the number of Heavi DOF
+% if heavDOF > 0, heaviNodes;     end
 
-file_name = input('Enter job name: ','s');
+% file_name = input('Enter job name: ','s');
+file_name = "iso_hp_KGD_";
 
 ITRA = CONTROL.Niter;
 TOL = CONTROL.TOL;   
@@ -49,7 +51,8 @@ TARY=zeros(NTOL,1);					% Time stamps for bisections
 %
 % Load increment loop
 %----------------------------------------------------------------------
-ISTEP = 0; FLAG10 = 1; flag_parallel=1;
+ISTEP = 0; FLAG10 = 1; 
+flag_parallel=0;
 while(FLAG10 == 1)					% Solution has been converged, start next increment
   FLAG10 = 0; FLAG20 = 1; FLAG30 = 1;
   % FLAG10 incrmental control
@@ -74,7 +77,7 @@ while(FLAG10 == 1)					% Solution has been converged, start next increment
   if (ISTEP>0)
       % Update stresses and history variables
       UPDATE=true;
-      StateVariableUpdate(PROP,UPDATE)
+      StateVariableUpdate(PROP,UPDATE);
       Postprocessor(ISTEP,file_name); 
   end  % Converged result, need to output
   %
@@ -85,8 +88,8 @@ while(FLAG10 == 1)					% Solution has been converged, start next increment
         if Propagation
             update = true ;
             levelSet(update);
-            heavDOF = nnz(NODES(:,2));                          % Define the number of Heavi DOF
-            if heavDOF > 0, heaviNodes;  end
+%             heavDOF = nnz(NODES(:,2));                          % Define the number of Heavi DOF
+%             if heavDOF > 0, heaviNodes;  end
             StateV_update;
             NEQ = 3*max(max(NODES));                            % Number of degrees of freedom for displacement
             TEMP  = zeros(NEQ,1);                               % The displacement as well as the pore pressure is initially zero;
@@ -160,16 +163,17 @@ while(FLAG10 == 1)					% Solution has been converged, start next increment
       end
   
       % Assemble K and F, become very complex, need to know different part 
-%       tic
-      updateDomainBeforeNonlocAverage(PROP);       % Calculate the local equivalent strain and store it in STATEV for nonlocal averaging later               
-      UPDATE=false; LTAN=true; NLTAN=false;        % Update the residual/internal force vector as well as the stiffness matrix
+      % tic
+      if PROP.nonlocal
+        updateDomainBeforeNonlocAverage(PROP);       % Calculate the local equivalent strain and store it in STATEV for nonlocal averaging later               
+      end
+        UPDATE=false; LTAN=true; NLTAN=PROP.nonlocal;        % Update the residual/internal force vector as well as the stiffness matrix
       if (flag_parallel)
           stiffnessMatrix_parallel(PROP,LTAN,NLTAN,Theta,deltaT,NEQ);
       else
           stiffnessMatrix(PROP,LTAN,NLTAN,UPDATE,Theta,deltaT);
       end
-      
-%       toc
+      % toc
 
       % Check convergence
       if(ITER>1)

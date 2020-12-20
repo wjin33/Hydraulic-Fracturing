@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function  stiffnessMatrix_parallel(PROP,LTAN,NLTAN,Theta,deltaT,NEQ)
 % This function calculates the global stiffness matrix for the desired 
@@ -117,12 +118,11 @@ parfor iElem = 1:NumbElement
                 StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
                     lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    if ( lcoeff == 0 )
                         continue;
                     end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
@@ -191,25 +191,20 @@ parfor iElem = 1:NumbElement
                         strain_nl = strain_nl + DEPS_nl ;
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
-                          
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_2t;
-                        eqeps_1s = PROP.eqeps_1s;
-                        
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
+
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            dequieps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1)]./equivalentEPS_nl;
                             nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
-                            mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
-                            mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
-                            StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
-                        end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
+                            Kelement = lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                             mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
                             mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
                             StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
@@ -340,12 +335,11 @@ parfor iElem = 1:NumbElement
                 StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
                 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
                     lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    if ( lcoeff == 0 )
                         continue;
                     end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
@@ -416,24 +410,19 @@ parfor iElem = 1:NumbElement
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
                           
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_1t;
-                        eqeps_1s = PROP.eqeps_1t;
-                        
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            dequieps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1)]./equivalentEPS_nl;
                             nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
-                            mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
-                            mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
-                            StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
-                        end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
+                            Kelement = lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                             mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
                             mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
                             StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
@@ -574,12 +563,11 @@ parfor iElem = 1:NumbElement
                 StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
                 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
                     lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    if ( lcoeff == 0 )
                         continue;
                     end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
@@ -646,24 +634,19 @@ parfor iElem = 1:NumbElement
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
                           
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_1t;
-                        eqeps_1s = PROP.eqeps_1t;
-                        
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            dequieps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1)]./equivalentEPS_nl;
                             nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
-                            mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
-                            mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
-                            StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
-                        end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            Kelement = lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
+                            Kelement = lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                             mapRow = reshape(localD'*ones(1,size(Kelement,2)),[],1);
                             mapCol = reshape(ones(size(Kelement,1),1)*local_nl,[],1);
                             StiffnessMatrix = fcn(StiffnessMatrix,sparse(mapRow,mapCol,reshape(Kelement,[],1),NEQ,NEQ));
@@ -824,80 +807,54 @@ end
 
 
 
-function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,kappa,Damage,GPporepressure)
-% Inputs:
-% PROP = [E0, nu0, epsilon_0, epsilon_f];
-% D = 4*4 elastic stiffness matrix
-% stress = [s11, s22, s12,   s33];
-% strain = [e11, e22, 2*e12, e33];
-% Plane strain problem e33=0
-%%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
+function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,kappa,Damage,GPporepressure)
+    % Inputs:
+    % PROP = [E0, nu0, epsilon_0, epsilon_f];
+    % D = 4*4 elastic stiffness matrix
+    % stress = [s11, s22, s12,   s33];
+    % strain = [e11, e22, 2*e12, e33];
+    % Plane strain problem e33=0
+    %%
     
-    if ( EquivStrain(1) > kappa(1) )
-        Damage(1) = 1-exp(-(EquivStrain(1) - eqeps_1t)/alpha_1t);
-        kappa(1) = EquivStrain(1);
-    end
-    if ( EquivStrain(2) > kappa(2) )
-        Damage(2) = 1-exp(-(EquivStrain(2) - eqeps_2t)/alpha_2t);
-        kappa(2) = EquivStrain(2);
-    end
+        if ( NLEquivStrain > kappa )
+            kappa = NLEquivStrain;
+            Damage = 1-PROP.eps_cr/kappa*exp(-PROP.B*(kappa - PROP.eps_cr));
+        end
     
-    DamageN = Damage;
-    kappaN = kappa;
+        DamageN = Damage;
+        kappaN = kappa;
+        
+        MATC=zeros(4,4);
     
-    omega1 = DamageN(1);
-    omega2 = DamageN(2);
+        D= (1-DamageN)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+        MATC(1,1)=(1-PROP.nu)*D;
+        MATC(1,2)=PROP.nu*D;
+        MATC(1,3)=PROP.nu*D;
+        MATC(1,4)=0;
+        MATC(2,1)=PROP.nu*D;
+        MATC(2,2)=(1-PROP.nu)*D;
+        MATC(2,3)=PROP.nu*D;
+        MATC(2,4)=0;
+        MATC(3,1)=PROP.nu*D;
+        MATC(3,2)=PROP.nu*D;
+        MATC(3,3)=(1-PROP.nu)*D;
+        MATC(3,4)=0;
+        MATC(4,1)=0;
+        MATC(4,2)=0;
+        MATC(4,3)=0;
+        MATC(4,4)=(1-2*PROP.nu)/2*D;
     
-%     omega1 = 0;
-%     omega2 = 0;
+        alpha = BiotCoefficient_tan_update(PROP);
     
-    MATC=zeros(4,4);
-
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
-    MATC(1,3)=-E11*nu21*(1-omega1)*(1+(1-omega2)*nu23)/D;
-    MATC(1,4)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
-    MATC(2,3)=-E22*(1-omega2)*(nu23+(1-omega1)*nu12*nu21)/D;
-    MATC(2,4)=0;
-    MATC(3,1)=MATC(1,3);
-    MATC(3,2)=MATC(2,3);
-    MATC(3,3)=E22*(1-omega2)*(1-omega1)*(nu12*nu21-1)/D;
-    MATC(3,4)=0;
-    MATC(4,1)=0;
-    MATC(4,2)=0;
-    MATC(4,3)=0;
-    MATC(4,4)=G12*(1-omega1)*(1-omega2);
+        stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)] - [alpha(1);alpha(2);alpha(1);alpha(3)]* GPporepressure;    %updated stress
     
-    alpha = BiotCoefficient_tan_update(PROP);
-
-    stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)] - [alpha(1);alpha(2);alpha(1);alpha(3)]* GPporepressure;    %updated stress
-
 end
 
 function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_table,STATEV )
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 %     global  STATEV
-
-    nonlocal_equ_eps = [0; 0;];
+    nonlocal_equ_eps = 0;
     scale = 0;
-
     for i = 1:size(nonlocal_table,1)
         iElem = nonlocal_table(i,1);
         iGP = nonlocal_table(i,2);
@@ -911,98 +868,38 @@ function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_ta
     if nonlocal_equ_eps < 0
         stop=1;
     end
-
 end
 
-function [MATC]=Gauss_tan_update(PROP,Damage)
-% Inputs:
-% Plane strain problem e33=0
-%%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-    
-    omega1 = Damage(1);
-    omega2 = Damage(2);
-    
-    MATC=zeros(3,3);
+    function [MATC]=Gauss_tan_update(PROP,Damage)
+    % Inputs:
+    % Plane strain problem e33=0
+        MATC=zeros(3,3);
+        D= (1-Damage)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+        MATC(1,1)=(1-PROP.nu)*D;
+        MATC(1,2)=PROP.nu*D;
+        MATC(1,3)=0;
+        MATC(2,1)=PROP.nu*D;
+        MATC(2,2)=(1-PROP.nu)*D;
+        MATC(2,3)=0;
+        MATC(3,1)=0;
+        MATC(3,2)=0;
+        MATC(3,3)=(1-2*PROP.nu)/2*D;
+    end
 
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
-    MATC(1,3)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
-    MATC(2,3)=0;
-    MATC(3,1)=0;
-    MATC(3,2)=0;
-    MATC(3,3)=G12*(1-omega1)*(1-omega2);
-end
-
-function [dC_domega1, dC_domega2]=Gauss_tan_derivative(PROP,Damage)
-% Inputs:
-% Plane strain problem e33=0
-%%
-
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-    
-    omega1 = Damage(1);
-    omega2 = Damage(2);
-    
-    nu21=E22*nu12/E11;
-    
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    C11=E11*(1-omega1)*((1-omega2)*nu23^2-1);
-    C12=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23);
-    C22=E22*(1-omega2)*((1-omega1)*nu12*nu21-1);
-%     C33=G12*(1-omega1)*(1-omega2);
-        
-    dD_domega1 = -2*(1-omega2)*nu12*nu21*nu23 - (2-omega2)*nu12*nu21;
-    dD_domega2 = -nu23^2 - 2*(1-omega1)*nu12*nu21*nu23 - (1-omega1)*nu12*nu21;
-    
-    dC11_domega1 = - E11*((1-omega2)*nu23^2-1);
-    dC11_domega2 = - E11*(1-omega1)*nu23^2;
-    
-    dC22_domega1 = - E22*(1-omega2)*nu12*nu21;
-    dC22_domega2 = - E22*((1-omega1)*nu12*nu21-1);
-    
-    dC33_domega1 = - G12*(1-omega2);
-    dC33_domega2 = - G12*(1-omega1);
-    
-    dC12_domega1 = E11*nu21*(1-omega2)*(1+nu23);
-    dC12_domega2 = E11*nu21*(1-omega1)*(1+nu23);
-    
-    dC_domega1 = zeros(3,3);
-    dC_domega1(1,1)=( dC11_domega1*D - dD_domega1*C11 )/D^2;
-    dC_domega1(1,2)=( dC12_domega1*D - dD_domega1*C12 )/D^2;
-    dC_domega1(1,3)=0;
-    dC_domega1(2,1)=dC_domega1(1,2);
-    dC_domega1(2,2)=( dC22_domega1*D - dD_domega1*C22 )/D^2;
-    dC_domega1(2,3)=0;
-    dC_domega1(3,1)=0;
-    dC_domega1(3,2)=0;
-    dC_domega1(3,3)=dC33_domega1;
-    
-    dC_domega2 = zeros(3,3);
-    dC_domega2(1,1)=( dC11_domega2*D - dD_domega2*C11 )/D^2;
-    dC_domega2(1,2)=( dC12_domega2*D - dD_domega2*C12 )/D^2;
-    dC_domega2(1,3)=0;
-    dC_domega2(2,1)=dC_domega2(1,2);
-    dC_domega2(2,2)=( dC22_domega2*D - dD_domega2*C22 )/D^2;
-    dC_domega2(2,3)=0;
-    dC_domega2(3,1)=0;
-    dC_domega2(3,2)=0;
-    dC_domega2(3,3)=dC33_domega2;
-end
+    function [dC_domega]=Gauss_tan_derivative(PROP)
+    % Inputs: derivative stiffness matrix with respective to damage scalar
+        dC_domega = zeros(3,3);
+        D= -PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+        dC_domega(1,1)=(1-PROP.nu)*D;
+        dC_domega(1,2)=PROP.nu*D;
+        dC_domega(1,3)=0;
+        dC_domega(2,1)=PROP.nu*D;
+        dC_domega(2,2)=(1-PROP.nu)*D;
+        dC_domega(2,3)=0;
+        dC_domega(3,1)=0;
+        dC_domega(3,2)=0;
+        dC_domega(3,3)=(1-2*PROP.nu)/2*D;
+    end
 
 function [traction] =  cohesiveLaw(jump, histo_jump, frac_prop)
 
@@ -1101,24 +998,17 @@ function [stiffness] =  cohesiveStiffness(jump, histo_jump, frac_prop)
 end
 
 function [lcoeff] = LocalCoefficient(PROP,kappa,NLEquivStrain)
-
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
-
+    % the local derivative of damage with respect to kappa
+    % demage eovlution function is defined as
+    % Damage = 1-PROP.eps_cr/kappa*exp(-PROP.B*(kappa - PROP.eps_cr));
+        
+        if (NLEquivStrain == kappa) 
+            lcoeff = (1/kappa + PROP.B)*(PROP.eps_cr/kappa)*exp(-PROP.B*(kappa-PROP.eps_cr));
+        else
+            lcoeff =  0;
+        end
     
-    lcoeff =  zeros(2,1);
-    
-    if (NLEquivStrain(1) == kappa(1))
-        lcoeff(1) = exp(-(NLEquivStrain(1) - eqeps_1t)/alpha_1t)/alpha_1t;
     end
-    if (NLEquivStrain(2) == kappa(2))
-        lcoeff(2) = exp(-(NLEquivStrain(2) - eqeps_2t)/alpha_2t)/alpha_2t;
-    end
-
-end
 
 
 

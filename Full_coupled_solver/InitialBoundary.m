@@ -1,6 +1,6 @@
-% Written By: Matthew Jon Pais, University of Florida (2009)
-% Website: http://sites.google.com/site/matthewjpais/Home
-% Email: mpais@ufl.edu, matthewjpais@gmail.com
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function InitialBoundary(Bsurface)
 % This function creates the global force vector from the user supplied

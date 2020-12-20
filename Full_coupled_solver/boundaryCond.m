@@ -1,6 +1,6 @@
-% Written By: Matthew Jon Pais, University of Florida (2010)
-% Website: http://sites.google.com/site/matthewjpais/Home
-% Email: mpais@ufl.edu, matthewjpais@gmail.com
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [freeDOF] = boundaryCond(DOF)
 % This function defines the boundary conditions to be applied.

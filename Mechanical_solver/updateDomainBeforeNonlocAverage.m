@@ -47,7 +47,7 @@ for iElem = 1:size(CONNEC,1)
            Strain = STATEV{iElem}{i}.strain;
             
            Strain=Strain+DEPS;
-           EquivStrain = computeEquivalentStrain(Strain,PROP); 
+           EquivStrain = computeEquivalentStrain(Strain); 
             
            STATEV{iElem}{i}.EquivStrain = EquivStrain;
            STATEV{iElem}{i}.volume = detJ*gw(i,1)*thickness;
@@ -121,7 +121,7 @@ for iElem = 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             
             Strain=Strain+DEPS;
-            EquivStrain = computeEquivalentStrain(Strain,PROP); 
+            EquivStrain = computeEquivalentStrain(Strain); 
             
             STATEV{iElem}{i}.EquivStrain = EquivStrain;
             STATEV{iElem}{i}.volume = detJ*gw(i,1)*thickness;
@@ -136,25 +136,11 @@ end
 end
 
 
-function [EquivStrain] = computeEquivalentStrain( strain,PROP)
+function [EquivStrain] = computeEquivalentStrain( strain)
 %%
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
-    eqeps_1s = PROP.eqeps_1s;
-    EquivStrain = zeros(2,1);
-    if ( strain(1,1)+ strain(2,1))> 0 
-        if (strain(1,1)>0)
-            EquivStrain(1,1) =  sqrt(strain(1,1)^2 + (strain(4,1)^2)*(eqeps_1t/eqeps_1s)^2);
-%     else
-%         EquivStrain(1,1) = abs(strain(4,1)*(eqeps_1t/eqeps_1s));
-        end
-        if (strain(2,1)>0)
-            EquivStrain(2,1) =  sqrt(strain(2,1)^2 + (strain(4,1)^2)*(eqeps_2t/eqeps_1s)^2);
-%     else
-%         EquivStrain(1,1) = abs(strain(4,1)*(eqeps_2t/eqeps_1s));
-        end
-    end
-    return
+        [~,strain_principal]= eigs([strain(1,1) strain(4,1); strain(4,1) strain(2,1)]);
+        EquivStrain = sqrt(((strain_principal(1,1)+abs(strain_principal(1,1)))/2)^2+...
+                           ((strain_principal(2,2)+abs(strain_principal(2,2)))/2)^2);   
 end
 
 
@@ -227,4 +213,3 @@ for e = 1:size(tri,1)
 end
 
 end
-

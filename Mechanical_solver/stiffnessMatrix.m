@@ -11,6 +11,10 @@ global CONNEC NODES PSI XYZ STATEV DISPDD DISPTD FORCE GKF connec_frac xyz_frac 
 
 for iElem= 1:size(CONNEC,1)
     isLocal = ismember(iElem,LocalElement);
+%     if isLocal ==1
+%         iElem
+%     end
+%     isLocal =1 ;
     N1  = CONNEC(iElem,2);                                                  % Node 1 for current element
     N2  = CONNEC(iElem,3);                                                  % Node 2 for current element
     N3  = CONNEC(iElem,4);                                                  % Node 3 for current element
@@ -34,10 +38,8 @@ for iElem= 1:size(CONNEC,1)
             gp = STATEV{iElem}{i}.natural_coodinates;                       % Gauss points
             W = STATEV{iElem}{i}.gauss_weight;                              % Gauss weights               
             xi = gp(1,1); eta = gp(2,1);                                    % Gauss points
-            
             N  = 1/4*[(1-xi)*(1-eta) (1+xi)*(1-eta) ...                    % Shape functions
                       (1+xi)*(1+eta) (1-xi)*(1+eta)];
-
             [Nxy, detJ] = Shape_Function(xi, eta, xyz);                     % Derivative of shape functions with respect to x/y;  Determinant of the Jacobian             
             Bu = [Nxy(1,1)   0          Nxy(1,2)   0          Nxy(1,3)   0          Nxy(1,4)   0;...
                   0          Nxy(2,1)   0          Nxy(2,2)   0          Nxy(2,3)   0          Nxy(2,4);...
@@ -48,14 +50,19 @@ for iElem= 1:size(CONNEC,1)
             DEPS =[deps(1,1); deps(2,1); 0; 0.5*deps(3,1);];
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
-
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+                
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
+            soft_B = STATEV{iElem}{i}.B;
 
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
             
             % Update plastic variables once convergence is reached within
             % one increment
@@ -74,20 +81,17 @@ for iElem= 1:size(CONNEC,1)
 
             %Update tangent/secant stiffness
             if LTAN
-                C=Gauss_tan_update(PROP,damageN);                                        % Damage dependent stiffness matrix
+                C=Gauss_tan_update(PROP,damageN);                                 % Damage dependent stiffness matrix
                 GKF(localD,localD) = GKF(localD,localD) + W*Bu'*C*Bu*detJ;        % Sum up all Gauss point contribution/% Assemble the global stiffness
                 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
-                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain,soft_B);
+                    if ( lcoeff == 0 )
                         continue;
                     end
-                    
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
-                        
                         iele_nl = nonlocal_table(inl,1);
                         igp_nl = nonlocal_table(inl,2);
                         weight_nl = nonlocal_table(inl,3);
@@ -97,17 +101,17 @@ for iElem= 1:size(CONNEC,1)
                         N2_nl  = CONNEC(iele_nl,3);                                                  % Node 2 for the element that has gauss points is located inside the nonlcal influence zone
                         N3_nl  = CONNEC(iele_nl,4);                                                  % Node 3 for the element that has gauss points is located inside the nonlcal influence zone
                         N4_nl  = CONNEC(iele_nl,5);                                                  % Node 4 for the element that has gauss points is located inside the nonlcal influence zone
-                        NN_nl  = NODES([N1_nl N2_nl N3_nl N4_nl]',:);                                          % Nodal data for current element             
+                        NN_nl  = NODES([N1_nl N2_nl N3_nl N4_nl]',:);                                % Nodal data for current element             
 
                         local_nl  = [N1_nl*2-1 N1_nl*2 N2_nl*2-1 N2_nl*2 N3_nl*2-1 N3_nl*2 N4_nl*2-1 N4_nl*2];             % Traditional index locations
                         xyz_nl = [XYZ(N1_nl,2) XYZ(N1_nl,3);
                                   XYZ(N2_nl,2) XYZ(N2_nl,3);
                                   XYZ(N3_nl,2) XYZ(N3_nl,3);
-                                  XYZ(N4_nl,2) XYZ(N4_nl,3);];                                % Nodal coordinate matrix for the elements that the nonlocal gauss point is located inside
+                                  XYZ(N4_nl,2) XYZ(N4_nl,3);];                              % Nodal coordinate matrix for the elements that the nonlocal gauss point is located inside
 
                         gp_nl = STATEV{iele_nl}{igp_nl}.natural_coodinates;                 % Gauss points
-%                         W_nl = STATEV{iele_nl}{igp_nl}.gauss_weight;                              % Gauss weights               
-                        xi_nl = gp_nl(1,1); eta_nl = gp_nl(2,1);                                % Gauss points
+%                         W_nl = STATEV{iele_nl}{igp_nl}.gauss_weight;                      % Gauss weights               
+                        xi_nl = gp_nl(1,1); eta_nl = gp_nl(2,1);                            % Gauss points
                         [Nxy_nl, ~] = Shape_Function(xi_nl, eta_nl, xyz_nl);                % Derivative of shape functions with respect to x/y;  Determinant of the Jacobian
                         
                         N_nl  = 1/4*[(1-xi_nl)*(1-eta_nl);(1+xi_nl)*(1-eta_nl);...                     % Shape functions
@@ -143,7 +147,6 @@ for iElem= 1:size(CONNEC,1)
                             end
                         end
                         
-              
                         DSPD_nl=DISPDD(local_nl);
                         B_nl = [Bu_nl Benr_nl];
                         deps_nl = B_nl*DSPD_nl;
@@ -152,26 +155,49 @@ for iElem= 1:size(CONNEC,1)
                         strain_nl = strain_nl + DEPS_nl ;
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
-                          
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_2t;
-                        eqeps_1s = PROP.eqeps_1s;
                         
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            deqeps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1) ]./equivalentEPS_nl;
+                          
+                            nl_contribution = (weight_nl*volume_nl/scale).*(deqeps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
+                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                         end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
-                        end
- 
                     end
-                    
+                elseif isLocal
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain,soft_B);
+                    if ( lcoeff == 0 )
+                        continue;
+                    end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
+                    equivalentEPS = NLEquivStrain; 
+                    if (equivalentEPS ~= 0 && lcoeff ~= 0)
+                        [~,esp_pri_val]= eigs([strainN(1,1) strainN(4,1); strainN(4,1) strainN(2,1)]);
+                        angle_eps_pri=[0 0];
+                        if (esp_pri_val(1,1) > 0)
+                            angle_eps_pri(1) = esp_pri_val(1,1);
+                        end
+                        if (esp_pri_val(2,2) > 0)
+                            angle_eps_pri(2) = esp_pri_val(2,2);
+                        end
+                        depieps_de = angle_eps_pri./sqrt(sum(angle_eps_pri.^2));
+                        I_inv = [strainN(1,1)+strainN(2,1) strainN(1,1)*strainN(2,1)-strainN(4,1)^2];
+                        denominator = sqrt(I_inv(1)^2-4*I_inv(2));
+                        de_dI = [0.5+0.5*I_inv(1)/denominator -1/denominator;
+                                 0.5-0.5*I_inv(1)/denominator  1/denominator;];
+                        dI_deps = [1 1 0; strainN(2,1) strainN(1,1) -strainN(4,1)];
+                        deqeps_deps = depieps_de*de_dI*dI_deps;
+                        CBu = [strainN(1:2,1); 2*strainN(4,1)]*(deqeps_deps*Bu);
+                        GKF(localD,localD) = GKF(localD,localD) + lcoeff*detJ*W*Bu'*dC_domega*CBu;
+                    end
                 end
             end
         end   
@@ -228,12 +254,18 @@ for iElem= 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            soft_B = STATEV{iElem}{i}.B;
+
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
                         
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
@@ -255,12 +287,11 @@ for iElem= 1:size(CONNEC,1)
                 GKF(localD,localD) = GKF(localD,localD) + W*Bu'*C*Bu*detJ;                 % Sum up all Gauss point contribution                
                 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
-                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain,soft_B);
+                    if ( lcoeff == 0  )
                         continue;
                     end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
@@ -332,25 +363,49 @@ for iElem= 1:size(CONNEC,1)
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
                           
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_1t;
-                        eqeps_1s = PROP.eqeps_1t;
-                        
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            deqeps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1) ]./equivalentEPS_nl;
+                          
+                            nl_contribution = (weight_nl*volume_nl/scale).*(deqeps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
-                        end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
+                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                         end
                         
                     end
-                    
+                else
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain,soft_B);
+                    if ( lcoeff == 0 )
+                        continue;
+                    end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
+                    equivalentEPS = NLEquivStrain; 
+                    if (equivalentEPS ~= 0 && lcoeff ~= 0)
+                        [~,esp_pri_val]= eigs([strainN(1,1) strainN(4,1); strainN(4,1) strainN(2,1)]);
+                        angle_eps_pri=[0 0];
+                        if (esp_pri_val(1,1) > 0)
+                            angle_eps_pri(1) = esp_pri_val(1,1);
+                        end
+                        if (esp_pri_val(2,2) > 0)
+                            angle_eps_pri(2) = esp_pri_val(2,2);
+                        end
+                        depieps_de = angle_eps_pri./sqrt(sum(angle_eps_pri.^2));
+                        I_inv = [strainN(1,1)+strainN(2,1) strainN(1,1)*strainN(2,1)-strainN(4,1)^2];
+                        denominator = sqrt(I_inv(1)^2-4*I_inv(2));
+                        de_dI = [0.5+0.5*I_inv(1)/denominator -1/denominator;
+                                 0.5-0.5*I_inv(1)/denominator  1/denominator;];
+                        dI_deps = [1 1 0; strainN(2,1) strainN(1,1) -strainN(4,1)];
+                        deqeps_deps = depieps_de*de_dI*dI_deps;
+                        CBu = [strainN(1:2,1); 2*strainN(4,1)]*(deqeps_deps*Bu);
+                        GKF(localD,localD) = GKF(localD,localD) + lcoeff*detJ*W*Bu'*dC_domega*CBu;
+                    end
                 end
             end
         end
@@ -413,12 +468,18 @@ for iElem= 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            soft_B = STATEV{iElem}{i}.B;
+
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
                         
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
@@ -440,12 +501,11 @@ for iElem= 1:size(CONNEC,1)
                 GKF(localD,localD) = GKF(localD,localD) + W*Bu'*C*Bu*detJ;                 % Sum up all Gauss point contribution                
                 
                 if NLTAN
-                    [dC_domega1, dC_domega2] = Gauss_tan_derivative(PROP,damageN);
-                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
-                    
-                    if ( lcoeff(1) == 0 && lcoeff(2) == 0 )
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain,soft_B);
+                    if ( lcoeff == 0  )
                         continue;
                     end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
                     
                     NNL = size(nonlocal_table,1);
                     for inl = 1:NNL
@@ -512,26 +572,52 @@ for iElem= 1:size(CONNEC,1)
                         
                         equivalentEPS_nl = STATEV{iele_nl}{igp_nl}.EquivStrain; 
                           
-                        eqeps_1t = PROP.eqeps_1t;
-                        eqeps_2t = PROP.eqeps_1t;
-                        eqeps_1s = PROP.eqeps_1t;
-                        
-                        if (equivalentEPS_nl(1) ~= 0 && lcoeff(1) ~= 0)
-                            dequieps_deps = [strain_nl(1)  0             strain_nl(4)*(eqeps_1t/eqeps_1s)^2]./equivalentEPS_nl(1);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
+                        if (equivalentEPS_nl ~= 0 && lcoeff ~= 0)
+                            [esp_pri_dir,esp_pri_val]= eigs([strain_nl(1,1) strain_nl(4,1); strain_nl(4,1) strain_nl(2,1)]);
+                            angle_eps_pri=[0;0];
+                            if (esp_pri_val(1,1) > 0)
+                                angle_eps_pri(1) = esp_pri_val(1,1);
+                            end
+                            if (esp_pri_val(2,2) > 0)
+                                angle_eps_pri(2) = esp_pri_val(2,2);
+                            end
+                            deqeps_deps = [esp_pri_dir(1,1)*angle_eps_pri(1)   esp_pri_dir(2,2)*angle_eps_pri(2)  esp_pri_dir(1,2)*angle_eps_pri(2)+esp_pri_dir(2,1)*angle_eps_pri(1) ]./equivalentEPS_nl;
+                          
+                            nl_contribution = (weight_nl*volume_nl/scale).*(deqeps_deps*B_nl);
                             CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(1)*detJ*W*Bu'*dC_domega1*CBu_nl;
+                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff*detJ*W*Bu'*dC_domega*CBu_nl;
                         end
-                        if (equivalentEPS_nl(2) ~= 0 && lcoeff(2) ~= 0 )
-                            dequieps_deps = [0             strain_nl(2)  strain_nl(4)*(eqeps_2t/eqeps_1s)^2]./equivalentEPS_nl(2);
-                            nl_contribution = (weight_nl*volume_nl/scale).*(dequieps_deps*B_nl);
-                            CBu_nl = [strainN(1:2,1); 2*strainN(4,1)]*nl_contribution;
-                            GKF(localD,local_nl) = GKF(localD,local_nl) + lcoeff(2)*detJ*W*Bu'*dC_domega2*CBu_nl;
+                    end
+                else
+                    lcoeff = LocalCoefficient(PROP,kappaN,NLEquivStrain);
+                    if ( lcoeff == 0 )
+                        continue;
+                    end
+                    [dC_domega] = Gauss_tan_derivative(PROP);
+                    equivalentEPS = NLEquivStrain; 
+                    if (equivalentEPS ~= 0 && lcoeff ~= 0)
+                        [~,esp_pri_val]= eigs([strainN(1,1) strainN(4,1); strainN(4,1) strainN(2,1)]);
+                        angle_eps_pri=[0 0];
+                        if (esp_pri_val(1,1) > 0)
+                            angle_eps_pri(1) = esp_pri_val(1,1);
                         end
+                        if (esp_pri_val(2,2) > 0)
+                            angle_eps_pri(2) = esp_pri_val(2,2);
+                        end
+                        depieps_de = angle_eps_pri./sqrt(sum(angle_eps_pri.^2));
+                        I_inv = [strainN(1,1)+strainN(2,1) strainN(1,1)*strainN(2,1)-strainN(4,1)^2];
+                        denominator = sqrt(I_inv(1)^2-4*I_inv(2));
+                        de_dI = [0.5+0.5*I_inv(1)/denominator -1/denominator;
+                                 0.5-0.5*I_inv(1)/denominator  1/denominator;];
+                        dI_deps = [1 1 0; strainN(2,1) strainN(1,1) -strainN(4,1)];
+                        deqeps_deps = depieps_de*de_dI*dI_deps;
+                        CBu = [strainN(1:2,1); 2*strainN(4,1)]*(deqeps_deps*Bu);
+                        GKF(localD,localD) = GKF(localD,localD) + lcoeff*detJ*W*Bu'*dC_domega*CBu;
                     end
                 end
             end
         end
+        
         
         I_frac = find( connec_frac(:,1) == iElem );
         
@@ -602,80 +688,12 @@ end
 
 end
 
-function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,kappa,Damage,isLocal)
-% Inputs:
-% PROP = [E0, nu0, epsilon_0, epsilon_f];
-% D = 4*4 elastic stiffness matrix
-% stress = [s11, s22, s12,   s33];
-% strain = [e11, e22, 2*e12, e33];
-% Plane strain problem e33=0
-%%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
-    if ~isLocal
-        if ( EquivStrain(1) > kappa(1) )
-            Damage(1) = 1-exp(-(EquivStrain(1) - eqeps_1t)/alpha_1t);
-            kappa(1) = EquivStrain(1);
-        end
-        if ( EquivStrain(2) > kappa(2) )
-            Damage(2) = 1-exp(-(EquivStrain(2) - eqeps_2t)/alpha_2t);
-            kappa(2) = EquivStrain(2);
-        end
-    end
-    
-    DamageN = Damage;
-    kappaN = kappa;
-    
-    omega1 = DamageN(1);
-    omega2 = DamageN(2);
-
-%     omega1 = 0;
-%     omega2 = 0;
-    
-    
-    MATC=zeros(4,4);
-
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
-    MATC(1,3)=-E11*nu21*(1-omega1)*(1+(1-omega2)*nu23)/D;
-    MATC(1,4)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
-    MATC(2,3)=-E22*(1-omega2)*(nu23+(1-omega1)*nu12*nu21)/D;
-    MATC(2,4)=0;
-    MATC(3,1)=MATC(1,3);
-    MATC(3,2)=MATC(2,3);
-    MATC(3,3)=E22*(1-omega2)*(1-omega1)*(nu12*nu21-1)/D;
-    MATC(3,4)=0;
-    MATC(4,1)=0;
-    MATC(4,2)=0;
-    MATC(4,3)=0;
-    MATC(4,4)=G12*(1-omega1)*(1-omega2);
-    
-%     alpha = BiotCoefficient_tan_update(PROP);
-
-    stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)];    %updated stress
-
-end
-
 function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_table )
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     global  STATEV
 
-    nonlocal_equ_eps = [0; 0;];
+    nonlocal_equ_eps = 0;
     scale = 0;
 
     for i = 1:size(nonlocal_table,1)
@@ -694,114 +712,88 @@ function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_ta
 
 end
 
+function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,kappa,Damage,isLocal,soft_B)
+    % Inputs:
+    % PROP = [E0, nu0, epsilon_0, epsilon_f];
+    %*D = 4*4 elastic stiffness matrix
+    % stress = [s11, s22, s12,   s33];
+    % strain = [e11, e22, 2*e12, e33];
+    % Plane strain problem e33=0
+    %%
+    
+        if isLocal
+            if ( NLEquivStrain > kappa )
+                kappa = NLEquivStrain;
+                Damage = 1-PROP.eps_cr/kappa*exp(-soft_B*(kappa - PROP.eps_cr));
+            end
+        end
+        
+        DamageN = Damage;
+        kappaN = kappa;
+        
+        MATC=zeros(4,4);
+    
+        D= (1-DamageN)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+        MATC(1,1)=(1-PROP.nu)*D;
+        MATC(1,2)=PROP.nu*D;
+        MATC(1,3)=PROP.nu*D;
+        MATC(1,4)=0;
+        MATC(2,1)=PROP.nu*D;
+        MATC(2,2)=(1-PROP.nu)*D;
+        MATC(2,3)=PROP.nu*D;
+        MATC(2,4)=0;
+        MATC(3,1)=PROP.nu*D;
+        MATC(3,2)=PROP.nu*D;
+        MATC(3,3)=(1-PROP.nu)*D;
+        MATC(3,4)=0;
+        MATC(4,1)=0;
+        MATC(4,2)=0;
+        MATC(4,3)=0;
+        MATC(4,4)=(1-2*PROP.nu)/2*D;
+    
+        stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)];    %updated stress
+    end
+
 function [MATC]=Gauss_tan_update(PROP,Damage)
 % Inputs:
 % Plane strain problem e33=0
-%%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-    
-    omega1 = Damage(1);
-    omega2 = Damage(2);
-
-%     omega1 = 0;
-%     omega2 = 0;
-
     MATC=zeros(3,3);
-
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
+    D= (1-Damage)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+    MATC(1,1)=(1-PROP.nu)*D;
+    MATC(1,2)=PROP.nu*D;
     MATC(1,3)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
+    MATC(2,1)=PROP.nu*D;
+    MATC(2,2)=(1-PROP.nu)*D;
     MATC(2,3)=0;
     MATC(3,1)=0;
     MATC(3,2)=0;
-    MATC(3,3)=G12*(1-omega1)*(1-omega2);
+    MATC(3,3)=(1-2*PROP.nu)/2*D;
 end
 
-function [dC_domega1, dC_domega2]=Gauss_tan_derivative(PROP,Damage)
-% Inputs:
-% Plane strain problem e33=0
-%%
-
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-    
-    omega1 = Damage(1);
-    omega2 = Damage(2);
-    
-    nu21=E22*nu12/E11;
-    
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    C11=E11*(1-omega1)*((1-omega2)*nu23^2-1);
-    C12=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23);
-    C22=E22*(1-omega2)*((1-omega1)*nu12*nu21-1);
-%     C33=G12*(1-omega1)*(1-omega2);
-        
-    dD_domega1 = -2*(1-omega2)*nu12*nu21*nu23 - (2-omega2)*nu12*nu21;
-    dD_domega2 = -nu23^2 - 2*(1-omega1)*nu12*nu21*nu23 - (1-omega1)*nu12*nu21;
-    
-    dC11_domega1 = - E11*((1-omega2)*nu23^2-1);
-    dC11_domega2 = - E11*(1-omega1)*nu23^2;
-    
-    dC22_domega1 = - E22*(1-omega2)*nu12*nu21;
-    dC22_domega2 = - E22*((1-omega1)*nu12*nu21-1);
-    
-    dC33_domega1 = - G12*(1-omega2);
-    dC33_domega2 = - G12*(1-omega1);
-    
-    dC12_domega1 = E11*nu21*(1-omega2)*(1+nu23);
-    dC12_domega2 = E11*nu21*(1-omega1)*(1+nu23);
-    
-    dC_domega1 = zeros(3,3);
-    dC_domega1(1,1)=( dC11_domega1*D - dD_domega1*C11 )/D^2;
-    dC_domega1(1,2)=( dC12_domega1*D - dD_domega1*C12 )/D^2;
-    dC_domega1(1,3)=0;
-    dC_domega1(2,1)=dC_domega1(1,2);
-    dC_domega1(2,2)=( dC22_domega1*D - dD_domega1*C22 )/D^2;
-    dC_domega1(2,3)=0;
-    dC_domega1(3,1)=0;
-    dC_domega1(3,2)=0;
-    dC_domega1(3,3)=dC33_domega1;
-    
-    dC_domega2 = zeros(3,3);
-    dC_domega2(1,1)=( dC11_domega2*D - dD_domega2*C11 )/D^2;
-    dC_domega2(1,2)=( dC12_domega2*D - dD_domega2*C12 )/D^2;
-    dC_domega2(1,3)=0;
-    dC_domega2(2,1)=dC_domega2(1,2);
-    dC_domega2(2,2)=( dC22_domega2*D - dD_domega2*C22 )/D^2;
-    dC_domega2(2,3)=0;
-    dC_domega2(3,1)=0;
-    dC_domega2(3,2)=0;
-    dC_domega2(3,3)=dC33_domega2;
+function [dC_domega]=Gauss_tan_derivative(PROP)
+% Inputs: derivative stiffness matrix with respective to damage scalar
+    dC_domega = zeros(3,3);
+    D= -PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+    dC_domega(1,1)=(1-PROP.nu)*D;
+    dC_domega(1,2)=PROP.nu*D;
+    dC_domega(1,3)=0;
+    dC_domega(2,1)=PROP.nu*D;
+    dC_domega(2,2)=(1-PROP.nu)*D;
+    dC_domega(2,3)=0;
+    dC_domega(3,1)=0;
+    dC_domega(3,2)=0;
+    dC_domega(3,3)=(1-2*PROP.nu)/2*D;
 end
 
-function [lcoeff] = LocalCoefficient(PROP,kappa,NLEquivStrain)
-
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
+function [lcoeff] = LocalCoefficient(PROP,kappa,NLEquivStrain,soft_B)
+% the local derivative of damage with respect to kappa
+% demage eovlution function is defined as
+% Damage = 1-PROP.eps_cr/kappa*exp(-PROP.B*(kappa - PROP.eps_cr));
     
-    lcoeff =  zeros(2,1);
-    
-    if (NLEquivStrain(1) == kappa(1))
-        lcoeff(1) = exp(-(NLEquivStrain(1) - eqeps_1t)/alpha_1t)/alpha_1t;
-    end
-    if (NLEquivStrain(2) == kappa(2))
-        lcoeff(2) = exp(-(NLEquivStrain(2) - eqeps_2t)/alpha_2t)/alpha_2t;
+    if (NLEquivStrain == kappa) 
+        lcoeff = (1/kappa + soft_B)*(PROP.eps_cr/kappa)*exp(-soft_B*(kappa-PROP.eps_cr));
+    else
+        lcoeff =  0;
     end
 
 end
@@ -972,6 +964,12 @@ end
 
 end
 
+function [EquivStrain] = computeEquivalentStrain( strain)
+    %%
+        [~,strain_principal]= eigs([strain(1,1) strain(4,1); strain(4,1) strain(2,1)]);
+        EquivStrain = sqrt(((strain_principal(1,1)+abs(strain_principal(1,1)))/2)^2+...
+                           ((strain_principal(2,2)+abs(strain_principal(2,2)))/2)^2);   
+end
 
 
 

@@ -1,3 +1,7 @@
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
+
 function [ NEQ ] = PorePressureInitialization(EXTPRESSURE)
 %%
 global PREPTD NODES xyz_frac

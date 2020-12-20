@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [EXTDISP,BNoset,BElset,Bsurface] = Preprocessor(file)
 
@@ -10,7 +11,7 @@ function [EXTDISP,BNoset,BElset,Bsurface] = Preprocessor(file)
 global CONNEC NODES XYZ
 
 maxN=50000;maxE=10000;
-NODES=zeros(maxN,3);
+NODES=zeros(maxN,4);
 XYZ=zeros(maxN,3);
 CONNEC=zeros(maxE,5);
 

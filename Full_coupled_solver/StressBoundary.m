@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [EXTFORCE]=StressBoundary(Bsurface,surf,stressT)
 % This function creates the global force vector from the user supplied input file.

@@ -1,24 +1,28 @@
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
+
 function []=StateV_update()	% Initialize elastic history dependent varibles
 %%
   global STATEV CONNEC NODES ELECENTER XYZ
   %
   NE = size(CONNEC, 1);
-%   STATEV_new=cell(1,NE);
+  % STATEV_new=cell(1,NE);
   %
   for iElem = 1:NE
-      N1  = CONNEC(iElem,2);                                                  % Node 1 for current element
-      N2  = CONNEC(iElem,3);                                                  % Node 2 for current element
-      N3  = CONNEC(iElem,4);                                                  % Node 3 for current element
-      N4  = CONNEC(iElem,5);                                                  % Node 4 for current element
+      N1  = CONNEC(iElem,2);                                               % Node 1 for current element
+      N2  = CONNEC(iElem,3);                                               % Node 2 for current element
+      N3  = CONNEC(iElem,4);                                               % Node 3 for current element
+      N4  = CONNEC(iElem,5);                                               % Node 4 for current element
       nodes = [N1 N2 N3 N4]';
-      NN  = NODES(nodes,:);                                                   % Nodal data for current element
+      NN  = NODES(nodes,:);                                                % Nodal data for current element
       ELECENTER(iElem,:) = sum(XYZ(nodes,2:3))./4;  
       HEN = nnz(NN(:,2));% Number of nodes with Heaviside enrichment
       SIGN = abs(sum(NN(:,3)));
       Ngp = size(STATEV{iElem},2);
       
       if HEN == 4 && Ngp == 4 && SIGN ~= 4
-          STATEV{iElem} = GPRecovery(iElem,nodes);
+          STATEV{iElem} = GPRecovery(iElem,NN);
 %          STATEV_new{iElem} = GPRecovery(iElem,nodes);
 %       else
 %          STATEV_new{iElem} =  STATEV{iElem};
@@ -44,9 +48,9 @@ function  [Enrichedcell]=GPRecovery(iElem,nodes)
   history.true_coodinates = [0; 0];
   history.sigma = [0; 0; 0; 0;];
   history.strain = [0; 0; 0; 0;];
-  history.damage = [0; 0];
-  history.kappa = [0; 0];
-  history.EquivStrain = [0; 0];
+  history.damage = 0;
+  history.kappa = 0;
+  history.EquivStrain = 0;
   history.nonlocalTable = [];
   history.volume = 0;                                     % Define the global K
   
@@ -55,7 +59,7 @@ function  [Enrichedcell]=GPRecovery(iElem,nodes)
   Y1 = XYZ(N1,3); Y2 = XYZ(N2,3); Y3 = XYZ(N3,3); Y4 = XYZ(N4,3);     % Nodal y-coordinates
   xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix
   if numel(PSI) == 0, PN = [0 0 0 0]; else
-        PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
+        PN = [ PSI{nodes(1,4)}(N1)  PSI{nodes(2,4)}(N2)  PSI{nodes(3,4)}(N3)  PSI{nodes(4,4)}(N4)];                 % Nodal crack level set values
   end
   [gp,gw] = subDomain_(3,PN,xyz);                         % Full Heaviside enrichment
   
@@ -82,11 +86,13 @@ function  FractureGPInitialization()
 % discontinuities defined by the user supplied input.
 
   global CONNEC NODES PSI XYZ connec_frac xyz_frac statev_frac PROP CRACK
-
-  fracxy = [];
-  enrElems = [];
   
-  CRACK
+  nCrack = size(CRACK,1); 
+  fracxy = cell(nCrack,1);
+  xyz_frac = cell(nCrack,1);
+%   connec_frac = cell(nCrack,1);
+%   statev_frac = cell(nCrack,1);
+  enrElems = cell(nCrack,1);
 
   for iElem = 1:size(CONNEC,1)
       N1  = CONNEC(iElem,2);                                                  % Node 1 for current element
@@ -104,18 +110,20 @@ function  FractureGPInitialization()
           xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4];                                % Nodal coordinate matrix
 
           if numel(PSI) == 0, PN = [0 0 0 0]; else
-                  PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
+                  PN = [ PSI{NN(1,4)}(N1)  PSI{NN(2,4)}(N2)  PSI{NN(3,4)}(N3)  PSI{NN(4,4)}(N4)];                 % Nodal crack level set values
           end
 %           if size(find( PN > 0),2)==4 || size(find( PN < 0),2)==4
 %               continue;
 %           end
           [~,~,~,fracnode] = subDomain(3,PN,xyz);                         % Full Heaviside enrichment
-
           if size( unique(fracnode,'rows'),1) ==1
               continue;
-          end  
-          fracxy = [fracxy; fracnode];
-          enrElems = [enrElems iElem];
+          end
+          [crack_id]=identify_crack_id(fracnode(1,:));
+          if crack_id ~= 0
+            fracxy{crack_id} = [fracxy{crack_id}; fracnode];
+            enrElems{crack_id} = [enrElems{crack_id} iElem];
+          end
       end
   end
   
@@ -127,10 +135,10 @@ function  FractureGPInitialization()
   frac.fluidVelocity = 0;
   frac.seglength = 0;
   frac.jump = [0;0];
-  frac.GI = 0;                  %N/m
+  frac.GI = 0;                   %N/m
   frac.GII = 0;                  %N/m
-  frac.sigmaMax = 0;              %N/m^2  Pa
-  frac.tauMax = 0;              %N/m^2  Pa
+  frac.sigmaMax = 0;             %N/m^2  Pa
+  frac.tauMax = 0;               %N/m^2  Pa
   frac.lambdaN = 0;
   frac.lambdaT = 0;
   frac.alpha = 0;
@@ -147,39 +155,39 @@ function  FractureGPInitialization()
   frac.GammaN = 0;
   frac.GammaT = 0;
 
-  UnorderedNodes = unique(fracxy,'rows');
-  orderedNodes = [];
-  
-  k = dsearchn(UnorderedNodes,CRACK(1,:));
- % k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),CRACK(1,:));
-  orderedNodes = UnorderedNodes(k,:);
-  UnorderedNodes = setdiff(UnorderedNodes,orderedNodes,'rows');
-  while (size(UnorderedNodes,1)>2)
+  for icrack=1:nCrack
+    UnorderedNodes = unique(fracxy{icrack},'rows');
+    backup_UnorderedNodes =UnorderedNodes;
+    orderedNodes = [];
+    k = dsearchn(UnorderedNodes,CRACK{icrack}(1,:));
+    % k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),CRACK{icrack}(1,:));
+    orderedNodes = UnorderedNodes(k,:);
+    UnorderedNodes = setdiff(UnorderedNodes,orderedNodes,'rows');
+    while (size(UnorderedNodes,1)>2)
       lambda = size(orderedNodes,1);
 %      k = dsearchn(UnorderedNodes,delaunayn(UnorderedNodes),orderedNodes(lambda,:));
       k = dsearchn(UnorderedNodes,orderedNodes(lambda,:));
       orderedNodes =[ orderedNodes;  UnorderedNodes(k,:)];
       UnorderedNodes = setdiff(UnorderedNodes,UnorderedNodes(k,:),'rows');
-  end
-  lambda = size(orderedNodes,1);
-  dist1 = sqrt( sum( (UnorderedNodes(1,:)-orderedNodes(lambda,:)).^2 ) );
-  dist2 = sqrt( sum( (UnorderedNodes(2,:)-orderedNodes(lambda,:)).^2 ) );
-  if dist1 < dist2
+    end
+    lambda = size(orderedNodes,1);
+    dist1 = sqrt( sum( (UnorderedNodes(1,:)-orderedNodes(lambda,:)).^2 ) );
+    dist2 = sqrt( sum( (UnorderedNodes(2,:)-orderedNodes(lambda,:)).^2 ) );
+    if dist1 < dist2
       orderedNodes = [orderedNodes; UnorderedNodes(1,:) ; UnorderedNodes(2,:) ];
-  else
+    else
       orderedNodes = [orderedNodes; UnorderedNodes(2,:) ; UnorderedNodes(1,:) ];
-  end
+    end
   
-  
-%   nPt = size(CRACK,1);
+%   nPt = size(CRACK{icrack},1);
 %   for iSeg = 1:(nPt-1)
-%       x1 = CRACK(iSeg,1);            y1 = CRACK(iSeg,2);
-%       x2 = CRACK(iSeg+1,1);          y2 = CRACK(iSeg+1,2);
-%       vectorA = [CRACK(iSeg+1,1)-CRACK(iSeg,1), CRACK(iSeg+1,2)-CRACK(iSeg,2)];
+%       x1 = CRACK{icrack}(iSeg,1);            y1 = CRACK{icrack}(iSeg,2);
+%       x2 = CRACK{icrack}(iSeg+1,1);          y2 = CRACK{icrack}(iSeg+1,2);
+%       vectorA = [CRACK{icrack}(iSeg+1,1)-CRACK{icrack}(iSeg,1), CRACK{icrack}(iSeg+1,2)-CRACK{icrack}(iSeg,2)];
 %       TempNodes = [];
 %       lambda = [];
 %       for inode = 1:size(UnorderedNodes,1)
-%           vectorB = [UnorderedNodes(inode,1)-CRACK(iSeg,1), UnorderedNodes(inode,2)-CRACK(iSeg,2)];
+%           vectorB = [UnorderedNodes(inode,1)-CRACK{icrack}(iSeg,1), UnorderedNodes(inode,2)-CRACK{icrack}(iSeg,2)];
 %           if abs(vectorA(1)) <= 1e-6
 %               if abs(vectorB(1)) <= 1e-6
 %                   lambday = vectorB(2)/vectorA(2);
@@ -213,36 +221,36 @@ function  FractureGPInitialization()
 %       end
 %   end
   
-  segment_number = size(enrElems,2);
-  xyz_frac = zeros(segment_number+1,4);
-  xyz_frac(:,1) = [1:segment_number+1 ]';
-  if size(orderedNodes,1) == size(xyz_frac,1)
-      xyz_frac(:,2:3)  = orderedNodes;
-  else
-      xyz_frac(:,2:3)  = backup_UnorderedNodes;
-  end
-%   xyz_frac(:,2:3)  = sortrows(UnorderedNodes,2);
+    segment_number = size(enrElems{icrack},2);
+    xyz_frac{icrack} = zeros(segment_number+1,4);
+    xyz_frac{icrack}(:,1) = [1:segment_number+1]';
+    if size(orderedNodes,1) == size(xyz_frac{icrack},1)
+      xyz_frac{icrack}(:,2:3)  = orderedNodes;
+    else
+      xyz_frac{icrack}(:,2:3)  = backup_UnorderedNodes;
+    end
+%   xyz_frac{icrack}(:,2:3)  = sortrows(UnorderedNodes,2);
   
-  statev_frac_new = cell(1,segment_number);
-  segment_belongings = connec_frac(:,1);
-  connec_frac = zeros(segment_number,3);
+    statev_frac_new = cell(1,segment_number);
+    segment_belongings = connec_frac{icrack}(:,1);
+    connec_frac{icrack} = zeros(segment_number,3);
 
-%   xyz_frac(:,2:3)  =  UnorderedNodes;
-  for inode = 1 : segment_number
-      xyz_frac(inode+1,4) = xyz_frac(inode,4) + sqrt(sum((xyz_frac(inode+1,2:3)-xyz_frac(inode,2:3)).^2));
-  end
+%   xyz_frac{icrack}(:,2:3)  =  UnorderedNodes;
+    for inode = 1 : segment_number
+      xyz_frac{icrack}(inode+1,4) = xyz_frac{icrack}(inode,4) + sqrt(sum((xyz_frac{icrack}(inode+1,2:3)-xyz_frac{icrack}(inode,2:3)).^2));
+    end
   
-  for i = 1:segment_number
-      xynode = fracxy(2*i-1:2*i, :);
-      Ia = find(xyz_frac(:,2) == xynode(1,1));
-      Ib = find(xyz_frac(:,3) == xynode(1,2));
+    for i = 1:segment_number
+      xynode = fracxy{icrack}(2*i-1:2*i, :);
+      Ia = find(xyz_frac{icrack}(:,2) == xynode(1,1));
+      Ib = find(xyz_frac{icrack}(:,3) == xynode(1,2));
       node1 = intersect(Ia,Ib);
-      Ia = find(xyz_frac(:,2) == xynode(2,1));
-      Ib = find(xyz_frac(:,3) == xynode(2,2));
+      Ia = find(xyz_frac{icrack}(:,2) == xynode(2,1));
+      Ib = find(xyz_frac{icrack}(:,3) == xynode(2,2));
       node2 = intersect(Ia,Ib);
       slope = xynode(1,:)-xynode(2,:);
       theta = atan(slope(2)/slope(1));
-      frac.GI = sqrt((PROP.G2*cos(theta))^2 + (PROP.G1*sin(theta))^2);                  %N/m
+      frac.GI = sqrt((PROP.G1*cos(theta))^2 + (PROP.G2*sin(theta))^2);                  %N/m
       frac.GII = frac.GI;                  %N/m
       frac.sigmaMax = sqrt((PROP.sigmaMax2*cos(theta))^2 + (PROP.sigmaMax1*sin(theta))^2);              %N/m^2  Pa
       frac.tauMax = frac.sigmaMax;              %N/m^2  Pa
@@ -261,17 +269,17 @@ function  FractureGPInitialization()
       frac.deltaT_conj = frac.deltaT-frac.deltaT*(frac.dGtn/frac.GI)^(1/frac.beta);
       frac.GammaN = -frac.GI*(frac.alpha/frac.m)^frac.m;
       frac.GammaT = (frac.beta/frac.n)^frac.n ;
-      connec_frac(i,:) = [enrElems(i) sort([node1 node2])];
-      frac.seglength = sqrt(sum((xyz_frac(node2,2:3)-xyz_frac(node1,2:3)).^2));
-      [index] = find(segment_belongings == enrElems(i));
+      connec_frac{icrack}(i,:) = [enrElems{icrack}(i) sort([node1 node2])];
+      frac.seglength = sqrt(sum((xyz_frac{icrack}(node2,2:3)-xyz_frac{icrack}(node1,2:3)).^2));
+      [index] = find(segment_belongings == enrElems{icrack}(i));
       if index
-          statev_frac_new{i} = statev_frac{index};
+          statev_frac_new{i} = statev_frac{icrack}{index};
       else
         statev_frac_new{i}= {frac, frac};
-        N1  = CONNEC(enrElems(i),2);                                                  % Node 1 for current element
-        N2  = CONNEC(enrElems(i),3);                                                  % Node 2 for current element
-        N3  = CONNEC(enrElems(i),4);                                                  % Node 3 for current element
-        N4  = CONNEC(enrElems(i),5);                                                  % Node 4 for current element
+        N1  = CONNEC(enrElems{icrack}(i),2);                                                  % Node 1 for current element
+        N2  = CONNEC(enrElems{icrack}(i),3);                                                  % Node 2 for current element
+        N3  = CONNEC(enrElems{icrack}(i),4);                                                  % Node 3 for current element
+        N4  = CONNEC(enrElems{icrack}(i),5);                                                  % Node 4 for current element
         X1 = XYZ(N1,2); X2 = XYZ(N2,2); X3 = XYZ(N3,2); X4 = XYZ(N4,2);     % Nodal x-coordinates
         Y1 = XYZ(N1,3); Y2 = XYZ(N2,3); Y3 = XYZ(N3,3); Y4 = XYZ(N4,3);     % Nodal y-coordinates
         xyz = [X1 Y1;X2 Y2;X3 Y3;X4 Y4]; 
@@ -326,10 +334,10 @@ function  FractureGPInitialization()
           statev_frac_new{i}{ig}.natural_coordinate_ele  = [xi ; eta];
         end
       end
+    end
+    statev_frac{icrack} = statev_frac_new;
+    CRACK{icrack} = xyz_frac{icrack}(:,2:3);
   end
-  
-  statev_frac = statev_frac_new;
-  
 end
 
 
@@ -381,3 +389,37 @@ for e = 1:size(tri,1)
 end
 
 end
+
+
+function  [crack_id]=identify_crack_id(point)
+
+    global CRACK
+    nCrack = size(CRACK,1); 
+    crack_id =0;
+    for i = 1:nCrack
+      npoint = size(CRACK{i},1);
+      for j=1:npoint-1
+          if ( CRACK{i}(j,2)==CRACK{i}(j+1,2) )
+              if  point(2)==CRACK{i}(j,2)
+                  crack_id = i;
+                  break
+              end
+          elseif ( CRACK{i}(j,1)==CRACK{i}(j+1,1) )
+              if point(1) == CRACK{i}(j,1)
+                  crack_id = i;
+                  break
+              end
+          else
+              slope = (CRACK{i}(j,2)-CRACK{i}(j+1,2))/(CRACK{i}(j,1)-CRACK{i}(j+1,1));
+              temp = point(2)-CRACK{i}(j,2) - slope*(point(1)-CRACK{i}(j,1));
+              if abs(temp)<1e-1
+                  crack_id = i;
+                  break
+              end
+          end
+      end
+  %     if crack_id ==0
+  %         crack_id = nCrack;
+  %     end
+    end
+  end

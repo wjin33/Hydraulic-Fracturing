@@ -1,30 +1,39 @@
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
+
 close all; clear;
 
-% PaceParalleltoolbox_r2016b('cores',8)
+PaceParalleltoolbox_r2016b('cores',8)
 
 global CRACK PROP CONTROL
 
 % addpath Full_Couple_solver_constantFracPressure
 addpath Full_Coupled_solver
 
+% w = warning('query','last');
+% id = w.identifier;
+% warning('off',id);
+
+
 %Mechanical and hydraulic material properties
 
-PROP.E11  = 15.96E9;            %Pa
-PROP.E22  = 15.96E9;            %Pa
-PROP.nu12 = 0.2;
-PROP.nu23 = 0.2;
-PROP.G12 = 15.96E9/2/(1+0.2);         %Pa
-PROP.eqeps_1t = 3.5E-5;
-PROP.eqeps_2t = 3.5E-5;
-PROP.alpha_1t = 1.5E-4;
-PROP.alpha_2t = 1.5E-4;
-PROP.eqeps_1s = 1.5E-4;
+
+PROP.E  = 15.96E9;            %Pa
+PROP.nu = 0.2;
+PROP.eps_cr = 3.5E-5;
 PROP.internal_length = 0.05;    %m
 PROP.plane_thickness = 1;       %m
 PROP.GI = 90;                  %N/m
 PROP.GII = PROP.GI;                  %N/m
+
+f_t = PROP.E * PROP.eps_cr;
+beta = 1;
+PROP.B = 2*PROP.E*beta*PROP.internal_length*f_t/(2*PROP.E*PROP.GI-f_t^2*beta*PROP.internal_length);
+
 PROP.sigmaMax1 = 1e6;              %N/m^2  Pa
 PROP.sigmaMax2 = 1e6;
+PROP.sigmaMax = 1e6;
 PROP.tauMax = 1e6;              %N/m^2  Pa
 PROP.lambdaN = 0.05;
 PROP.lambdaT = 0.05;
@@ -50,10 +59,12 @@ PROP.Kf = 3e9;                        %Pa N/m^2  the bulk modulus of water
 PROP.porosity = 0.19;                 %20% the porosity of rock(shale)
 
 %Initial cracks: perforated from the boundary of borehole
-CRACK  = [-10 0; -9.9 0];
+% CRACK  = [-10 0; -9.9 0];
+CRACK  = [0 2.5; 20 2.5];
 
 % read abaqus input file to obtain nodes, coordinates, connectivity, surfaces and sets;
-file = 'KGD.inp';
+% file = 'KGD.inp';
+file = 'multi_stage.inp';
 
 [EXTDISP,BNoset,BElset,Bsurface] = Preprocessor(file);
 
@@ -68,7 +79,7 @@ applied_stress = [];
 [EXTFORCE] = StressBoundary(Bsurface,surf,applied_stress);      % stress distributions
 
 %  set = {'Set-1','Set-2'};
-set = {'Set-2'};
+set = {'Set-1'};
 pressureB = [0];
 [EXTPRESSURE] = PressureBoundary(BNoset,set,pressureB);  %pore presssure boundary
 
@@ -81,13 +92,11 @@ injection_rate = 0.0002;   % m^2/s
 CONTROL.Theta = 2/3;
 CONTROL.timeI = 0.0;        % Starting time
 CONTROL.timeF = 10;        % Ending time  unit second
-CONTROL.deltaT = 0.01;         % Time increment
+CONTROL.deltaT = 0.1;         % Time increment
 CONTROL.Ncutting = 10;      % Allowed times of cutting back
 CONTROL.Niter = 15;         % Maximum number of iteration for each increment
 CONTROL.TOL = 1e-5;         % Convergence tolerance
 % for simplified model
 % NR_solver(CONTROL,PROP,EXTFORCE,EXTDISP,EXTPRESSURE,EXTFlUX,injection_rate)			
 NR_solver(CONTROL,PROP,EXTFORCE,EXTDISP,EXTPRESSURE,EXTFlUX)
-
-
 

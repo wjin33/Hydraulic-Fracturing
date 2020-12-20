@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function [EXTDISP,EXTFlUX,EXTPRESSURE]=FluxBoundary(Bsurface,surf,applied_flux,injection_rate,EXTDISP,EXTPRESSURE)
 % This function creates the global force vector from the user supplied
@@ -11,7 +12,7 @@ n = size(surf,2);      % Number of boundary surface with applied stress
 
 m = size(Bsurface,1);  % Number of surface defined in the input file
 ind = [];
-% Create the global force matrix from distributed flux, we do not use to for the hydraulic pressurization case
+% Create the global force matrix from distributed flux, we do not use for the hydraulic pressurization case
 globalF = zeros(3*max(max(NODES)),1);                                           
 for iForce = 1:m
     for iSurf = 1:n

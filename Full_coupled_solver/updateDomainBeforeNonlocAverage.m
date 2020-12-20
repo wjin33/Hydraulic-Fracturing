@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function updateDomainBeforeNonlocAverage(PROP)
 % This function calculates the global stiffness matrix for the desired 
@@ -47,7 +48,7 @@ for iElem = 1:size(CONNEC,1)
            Strain = STATEV{iElem}{i}.strain;
             
            Strain=Strain+DEPS;
-           EquivStrain = computeEquivalentStrain(Strain,PROP); 
+           EquivStrain = computeEquivalentStrain(Strain); 
             
            STATEV{iElem}{i}.EquivStrain = EquivStrain;
            STATEV{iElem}{i}.volume = detJ*gw(i,1)*thickness;
@@ -61,7 +62,8 @@ for iElem = 1:size(CONNEC,1)
 
         if HEN == 4 && SIGN ~= 4                                                    % Fully enriched element
             if numel(PSI) == 0, PN = [0 0 0 0]; else
-                PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
+                  icrack = NN(1,4);
+                  PN = [ PSI{icrack}(N1)  PSI{icrack}(N2)  PSI{icrack}(N3)  PSI{icrack}(N4)];               % Nodal crack level set values
             end
             [gp,gw,J] = subDomain(3,PN,xyz);                         % Full Heaviside enrichment
         else                                                                % Partially enriched element
@@ -90,10 +92,11 @@ for iElem = 1:size(CONNEC,1)
             index = 1;
             for iN = 1:4
                 if NN(iN,2) ~= 0
-                    psi1 = PSI(N1);                                         % Psi level set value at node 1
-                    psi2 = PSI(N2);                                         % Psi level set value at node 2
-                    psi3 = PSI(N3);                                         % Psi level set value at node 3
-                    psi4 = PSI(N4);                                         % Psi level set value at node 4
+                    icrack = NN(iN,4);
+                    psi1 = PSI{icrack}(N1);                                         % Psi level set value at node 1
+                    psi2 = PSI{icrack}(N2);                                         % Psi level set value at node 2
+                    psi3 = PSI{icrack}(N3);                                         % Psi level set value at node 3
+                    psi4 = PSI{icrack}(N4);                                         % Psi level set value at node 4
                     psi  = N(1)*psi1+N(2)*psi2+N(3)*psi3+N(4)*psi4;         % Psi level set value at current gauss point
     
                     Hgp = sign(psi);                                        % Heaviside value at current gauss point
@@ -121,7 +124,7 @@ for iElem = 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             
             Strain=Strain+DEPS;
-            EquivStrain = computeEquivalentStrain(Strain,PROP); 
+            EquivStrain = computeEquivalentStrain(Strain); 
             
             STATEV{iElem}{i}.EquivStrain = EquivStrain;
             STATEV{iElem}{i}.volume = detJ*gw(i,1)*thickness;
@@ -135,26 +138,11 @@ end
 
 end
 
-
-function [EquivStrain] = computeEquivalentStrain( strain,PROP)
-%%
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
-    eqeps_1s = PROP.eqeps_1s;
-    EquivStrain = zeros(2,1);
-    if ( strain(1,1)+ strain(2,1))> 0 
-        if (strain(1,1)>0)
-            EquivStrain(1,1) =  sqrt(strain(1,1)^2 + (strain(4,1)^2)*(eqeps_1t/eqeps_1s)^2);
-%     else
-%         EquivStrain(1,1) = abs(strain(4,1)*(eqeps_1t/eqeps_1s));
-        end
-        if (strain(2,1)>0)
-            EquivStrain(2,1) =  sqrt(strain(2,1)^2 + (strain(4,1)^2)*(eqeps_2t/eqeps_1s)^2);
-%     else
-%         EquivStrain(1,1) = abs(strain(4,1)*(eqeps_2t/eqeps_1s));
-        end
-    end
-    return
+function [EquivStrain] = computeEquivalentStrain( strain)
+    %%
+        [~,strain_principal]= eigs([strain(1,1) strain(4,1); strain(4,1) strain(2,1)]);
+        EquivStrain = sqrt((strain_principal(1,1)+abs(strain_principal(1,1))/2)^2+...
+                           (strain_principal(2,2)+abs(strain_principal(2,2))/2)^2);   
 end
 
 

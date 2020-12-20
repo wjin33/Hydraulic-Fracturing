@@ -19,8 +19,8 @@ function [Propagation] = PropagationLaw
     number = size (Tip_neighbor,1) ;
     
     scale = 0;
-    weighted_vector = [0 0;0 0];
-    weighted_damage = [0; 0];
+    weighted_vector = [0 0;];
+    weighted_damage = 0;
     
     for i = 1:number
         iElem = Tip_neighbor(i);
@@ -36,24 +36,25 @@ function [Propagation] = PropagationLaw
                     volume = STATEV{iElem}{j}.volume;
                     damage = (weight*volume).*STATEV{iElem}{j}.damage ;
                     weighted_damage = weighted_damage + damage;
-                    weighted_vector = weighted_vector + [damage(1,1).*vector ;  damage(2,1).*vector];
+                    weighted_vector = weighted_vector + damage.*vector;
                     scale = scale + weight*volume;
                 end
             end
         end 
     end
     weighted_damage = weighted_damage./scale;
-    [I,~]=find(weighted_damage >= critical_damage);
-    if size(I)>1
-        [I,~]=find(weighted_damage == max(weighted_damage));
-    end
-    if (~isempty(I))
-%         potetial_direction_uni = weighted_vector(I,:)./ sqrt(sum(weighted_vector(I,:).^2));
-%         nPt = nPt + 1;
-%         CRACK(nPt,:) = Tip + potetial_direction_uni.*internal_length/2;
-%         Propagation = true ;
+%     [I,~]=find(weighted_damage >= critical_damage);
+%     if size(I)>1
+%         [I,~]=find(weighted_damage == max(weighted_damage));
+%     end
+%     if (~isempty(I))
+% %         potetial_direction_uni = weighted_vector(I,:)./ sqrt(sum(weighted_vector(I,:).^2));
+% %         nPt = nPt + 1;
+% %         CRACK(nPt,:) = Tip + potetial_direction_uni.*internal_length/2;
+% %         Propagation = true ;
+    if (weighted_damage>=critical_damage)
         nPt = nPt + 1;
-        CRACK(nPt,:) = Tip + [1,0.0]*internal_length/4;
+        CRACK(nPt,:) = Tip + [0,1.0]*internal_length/4;
         Propagation = true ;
     end 
 

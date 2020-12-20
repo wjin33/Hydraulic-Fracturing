@@ -49,13 +49,18 @@ for iElem= 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
 
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
+            soft_B = STATEV{iElem}{i}.B;
 
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
             
             % Update plastic variables once convergence is reached within
             % one increment
@@ -123,12 +128,17 @@ for iElem= 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            soft_B = STATEV{iElem}{i}.B;
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
                         
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
@@ -200,12 +210,17 @@ for iElem= 1:size(CONNEC,1)
             Strain = STATEV{iElem}{i}.strain;
             strainN = Strain + DEPS ;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,scale] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
-            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal);
+            soft_B = STATEV{iElem}{i}.B;
+            [stressN, damageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,Kappa,Damage,isLocal,soft_B);
                         
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
@@ -225,8 +240,8 @@ for iElem= 1:size(CONNEC,1)
         N1_frac  = connec_frac(I_frac,2);                                              % Node 1 for current fracture segment
         N2_frac  = connec_frac(I_frac,3);                                              % Node 2 for current fracture segment
         
-        X1_frac = xyz_frac(N1_frac,4);
-        X2_frac = xyz_frac(N2_frac,4);
+%         X1_frac = xyz_frac(N1_frac,4);
+%         X2_frac = xyz_frac(N2_frac,4);
         
         tan_frac = xyz_frac(N2_frac,2:3) - xyz_frac(N1_frac,2:3);
         tan_frac = tan_frac./sqrt(sum(tan_frac.^2));
@@ -276,93 +291,71 @@ end
 
 end
 
-function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,kappa,Damage,isLocal)
-% Inputs:
-% PROP = [E0, nu0, epsilon_0, epsilon_f];
-% D = 4*4 elastic stiffness matrix
-% stress = [s11, s22, s12,   s33];
-% strain = [e11, e22, 2*e12, e33];
-% Plane strain problem e33=0
-%%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
-
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
-    if ~isLocal
-        if ( EquivStrain(1) > kappa(1) )
-            Damage(1) = 1-exp(-(EquivStrain(1) - eqeps_1t)/alpha_1t);
-            kappa(1) = EquivStrain(1);
+function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,kappa,Damage,isLocal,soft_B)
+    % Inputs:
+    % PROP = [E0, nu0, epsilon_0, epsilon_f];
+    %*D = 4*4 elastic stiffness matrix
+    % stress = [s11, s22, s12,   s33];
+    % strain = [e11, e22, 2*e12, e33];
+    % Plane strain problem e33=0
+    %%
+    
+        if isLocal
+            if ( EquivStrain > kappa )
+                kappa = EquivStrain;
+                Damage = 1-PROP.eps_cr/kappa*exp(-soft_B*(kappa - PROP.eps_cr));
+            end
         end
-        if ( EquivStrain(2) > kappa(2) )
-            Damage(2) = 1-exp(-(EquivStrain(2) - eqeps_2t)/alpha_2t);
-            kappa(2) = EquivStrain(2);
+        
+        DamageN = Damage;
+        kappaN = kappa;
+        
+        MATC=zeros(4,4);
+    
+        D= (1-DamageN)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+        MATC(1,1)=(1-PROP.nu)*D;
+        MATC(1,2)=PROP.nu*D;
+        MATC(1,3)=PROP.nu*D;
+        MATC(1,4)=0;
+        MATC(2,1)=PROP.nu*D;
+        MATC(2,2)=(1-PROP.nu)*D;
+        MATC(2,3)=PROP.nu*D;
+        MATC(2,4)=0;
+        MATC(3,1)=PROP.nu*D;
+        MATC(3,2)=PROP.nu*D;
+        MATC(3,3)=(1-PROP.nu)*D;
+        MATC(3,4)=0;
+        MATC(4,1)=0;
+        MATC(4,2)=0;
+        MATC(4,3)=0;
+        MATC(4,4)=(1-2*PROP.nu)/2*D;
+    
+        stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)];    %updated stress
+    end
+
+        function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_table )
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        
+            global  STATEV
+        
+            nonlocal_equ_eps = 0;
+            scale = 0;
+        
+            for i = 1:size(nonlocal_table,1)
+                iElem = nonlocal_table(i,1);
+                iGP = nonlocal_table(i,2);
+                weight = nonlocal_table(i,3);
+                volume = STATEV{iElem}{iGP}.volume;
+                equivalentEPS = STATEV{iElem}{iGP}.EquivStrain; 
+                nonlocal_equ_eps = nonlocal_equ_eps + equivalentEPS.*(weight*volume);
+                scale = scale + (weight*volume);
+            end
+            nonlocal_equ_eps = nonlocal_equ_eps./scale;
+            if nonlocal_equ_eps < 0
+                stop=1;
+            end
+        
         end
-    end
-    
-    DamageN = Damage;
-    kappaN = kappa;
-    
-    omega1 = DamageN(1);
-    omega2 = DamageN(2);
-    
-    MATC=zeros(4,4);
-
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
-    MATC(1,3)=-E11*nu21*(1-omega1)*(1+(1-omega2)*nu23)/D;
-    MATC(1,4)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
-    MATC(2,3)=-E22*(1-omega2)*(nu23+(1-omega1)*nu12*nu21)/D;
-    MATC(2,4)=0;
-    MATC(3,1)=MATC(1,3);
-    MATC(3,2)=MATC(2,3);
-    MATC(3,3)=E22*(1-omega2)*(1-omega1)*(nu12*nu21-1)/D;
-    MATC(3,4)=0;
-    MATC(4,1)=0;
-    MATC(4,2)=0;
-    MATC(4,3)=0;
-    MATC(4,4)=G12*(1-omega1)*(1-omega2);
-    
-%     alpha = BiotCoefficient_tan_update(PROP);
-
-    stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)];    %updated stress
-
-end
-
-function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_table )
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-    global  STATEV
-
-    nonlocal_equ_eps = [0; 0;];
-    scale = 0;
-
-    for i = 1:size(nonlocal_table,1)
-        iElem = nonlocal_table(i,1);
-        iGP = nonlocal_table(i,2);
-        weight = nonlocal_table(i,3);
-        volume = STATEV{iElem}{iGP}.volume;
-        equivalentEPS = STATEV{iElem}{iGP}.EquivStrain; 
-        nonlocal_equ_eps = nonlocal_equ_eps + equivalentEPS.*(weight*volume);
-        scale = scale + (weight*volume);
-    end
-    nonlocal_equ_eps = nonlocal_equ_eps./scale;
-    if nonlocal_equ_eps < 0
-        stop=1;
-    end
-
-end
 
 function [Nxy, detJ] = Shape_Function(xi, eta, Elxy)
 %******************************************************************************
@@ -530,10 +523,9 @@ end
 
 end
 
-
-
-
-
-
-
-
+function [EquivStrain] = computeEquivalentStrain( strain)
+    %%
+        [~,strain_principal]= eigs([strain(1,1) strain(4,1); strain(4,1) strain(2,1)]);
+        EquivStrain = sqrt(((strain_principal(1,1)+abs(strain_principal(1,1)))/2)^2+...
+                           ((strain_principal(2,2)+abs(strain_principal(2,2)))/2)^2);   
+end

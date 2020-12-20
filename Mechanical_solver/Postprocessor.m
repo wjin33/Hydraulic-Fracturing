@@ -1,7 +1,7 @@
 % Written By: Wencheng Jin, Georgia Institute of Technology (2018)
 % Email: wencheng.jin@gatech.edu
 
-function Postprocessor(STEP,file_name)
+function Postprocessor(STEP,EXTDISP,file_name)
 % This function output the all the primary and secondary results of the
 % simulation into vtk formate for post processing
 
@@ -21,9 +21,9 @@ if isempty(psi)
     phi = zeros(npoints,1);
 end
 stress = zeros(npoints,4);
-damage = zeros(npoints,2);
+damage = zeros(npoints,1);
 strain = zeros(npoints,4);
-NLEquivStrain = zeros(npoints,2);
+NLEquivStrain = zeros(npoints,1);
 
 EnrichElems = enrElem();
 UnenrichedElem = setdiff([1:ncells]', EnrichElems);
@@ -99,9 +99,7 @@ for i=1:npoints
     b_stress3=zeros(3,1);
     b_stress4=zeros(3,1);
     b_damage1 = zeros(3,1);
-    b_damage2 = zeros(3,1);
     b_NLEquivStrain1= zeros(3,1);
-    b_NLEquivStrain2= zeros(3,1);
     b_strain1= zeros(3,1);
     b_strain2= zeros(3,1);
     b_strain4= zeros(3,1);
@@ -117,9 +115,7 @@ for i=1:npoints
             b_stress3 = b_stress3+P'.*STATEV{hElem(j)}{k}.sigma(3,1);
             b_stress4 = b_stress4+P'.*STATEV{hElem(j)}{k}.sigma(4,1);
             b_damage1 = b_damage1+P'.*STATEV{hElem(j)}{k}.damage(1,1);
-            b_damage2 = b_damage2+P'.*STATEV{hElem(j)}{k}.damage(2,1);
             b_NLEquivStrain1 = b_NLEquivStrain1+P'.*STATEV{hElem(j)}{k}.NLEquivStrain(1,1);
-            b_NLEquivStrain2 = b_NLEquivStrain2+P'.*STATEV{hElem(j)}{k}.NLEquivStrain(2,1);
             b_strain1 = b_strain1+P'.*STATEV{hElem(j)}{k}.strain(1,1);
             b_strain2 = b_strain2+P'.*STATEV{hElem(j)}{k}.strain(2,1);
             b_strain4 = b_strain4+P'.*STATEV{hElem(j)}{k}.strain(4,1);
@@ -130,9 +126,7 @@ for i=1:npoints
     a_stress3 = A\b_stress3;
     a_stress4 = A\b_stress4;
     a_damage1 = A\b_damage1;
-    a_damage2 = A\b_damage2;
     a_NLEquivStrain1 = A\b_NLEquivStrain1;
-    a_NLEquivStrain2 = A\b_NLEquivStrain2;
     a_strain1 = A\b_strain1;
     a_strain2 = A\b_strain2;
     a_strain4 = A\b_strain4;
@@ -144,12 +138,10 @@ for i=1:npoints
     stress(NodeNumber,3)=P*a_stress3;
     stress(NodeNumber,4)=P*a_stress4;
     damage(NodeNumber,1)=P*a_damage1; 
-    damage(NodeNumber,2)=P*a_damage2;
     strain(NodeNumber,1)=P*a_strain1;
     strain(NodeNumber,2)=P*a_strain2;
     strain(NodeNumber,4)=P*a_strain4;
     NLEquivStrain(NodeNumber,1)=P*a_NLEquivStrain1;
-    NLEquivStrain(NodeNumber,2)=P*a_NLEquivStrain2;
 end
 % %
 % 
@@ -220,14 +212,14 @@ for i = 1:npoints
     fprintf(fid, '  %8.6e   %8.6e   %8.6e   %8.6e', strain(i,1), strain(i,2), strain(i,3), strain(i,4));
 end 
 fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="2" format="ascii">\n');
+fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="1" format="ascii">\n');
 for i = 1:npoints
-    fprintf(fid, '  %8.6e   %8.6e', damage(i,1), damage(i,2));
+    fprintf(fid, '  %8.6e', damage(i,1));
 end 
 fprintf(fid, ' </DataArray>\n');
-fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="2" format="ascii">\n');
+fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="1" format="ascii">\n');
 for i = 1:npoints
-    fprintf(fid, '  %8.6e   %8.6e', NLEquivStrain(i,1), NLEquivStrain(i,2));
+    fprintf(fid, '  %8.6e', NLEquivStrain(i,1));
 end 
 fprintf(fid, ' </DataArray>\n');
 fprintf(fid, '<DataArray type="Float64" Name="LS_psi" NumberOfComponents="1" format="ascii">\n');
@@ -250,9 +242,9 @@ for i = 1:NELE
 %     Trinodes = zeros(12,2);
     Tridisp = zeros(12,2);
     Tristress = zeros(12,4);
-    Tridamage = zeros(12,2);
+    Tridamage = zeros(12,1);
     Tristrain = zeros(12,4);
-    TriNLEquivStrain = zeros(12,2);
+    TriNLEquivStrain = zeros(12,1);
     Tripsi = zeros(12,1);
     Triphi = zeros(12,1);
 %     TriPorP = zeros(12,1);
@@ -283,12 +275,10 @@ for i = 1:NELE
         Tristress(j,3)=N'*stress([N1 N2 N3 N4]',3);
         Tristress(j,4)=N'*stress([N1 N2 N3 N4]',4);
         Tridamage(j,1)=N'*damage([N1 N2 N3 N4]',1);
-        Tridamage(j,2)=N'*damage([N1 N2 N3 N4]',2);
         Tristrain(j,1)=N'*strain([N1 N2 N3 N4]',1);
         Tristrain(j,2)=N'*strain([N1 N2 N3 N4]',2);
         Tristrain(j,4)=N'*strain([N1 N2 N3 N4]',4);
         TriNLEquivStrain(j,1)=N'*NLEquivStrain([N1 N2 N3 N4]',1);
-        TriNLEquivStrain(j,2)=N'*NLEquivStrain([N1 N2 N3 N4]',2);
               
         Nenr = [];
         Nb = [];
@@ -389,14 +379,14 @@ for i = 1:NELE
         fprintf(fid, '  %8.6e   %8.6e   %8.6e   %8.6e', Tristrain(i,1), Tristrain(i,2), Tristrain(i,3), Tristrain(i,4));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="2" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="Damage" NumberOfComponents="1" format="ascii">\n');
     for i = 1:12
-        fprintf(fid, '  %8.6e   %8.6e', Tridamage(i,1), Tridamage(i,2));
+        fprintf(fid, '  %8.6e', Tridamage(i,1));
     end 
     fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="2" format="ascii">\n');
+    fprintf(fid, '<DataArray type="Float64" Name="NLEquivalentStrain" NumberOfComponents="1" format="ascii">\n');
     for i = 1:12
-        fprintf(fid, '  %8.6e   %8.6e', TriNLEquivStrain(i,1), TriNLEquivStrain(i,2));
+        fprintf(fid, '  %8.6e', TriNLEquivStrain(i,1));
     end 
     fprintf(fid, ' </DataArray>\n');
     fprintf(fid, '<DataArray type="Float64" Name="LS_psi" NumberOfComponents="1" format="ascii">\n');
@@ -426,13 +416,16 @@ fclose(fid);
 % fprintf(fid, '\n');
 % fclose(fid);
 
+ind=find(EXTDISP(:,2)~=0);
+Displacement_node=EXTDISP(ind,1);
 FORCE_ = full(FORCE);
 filename = strcat(file_name,'Reaction.txt');
 fid = fopen(filename, 'a');
-fprintf(fid, '  %8.6e   %8.6e', DISPTD_(6),-FORCE_(6)); 
+for i=1:size(Displacement_node,1)
+    fprintf(fid, '   %8.6e   %8.6e', DISPTD_(Displacement_node(i)),FORCE_(Displacement_node(i))); 
+end
 fprintf(fid, '\n');
 fclose(fid);
-
 
 end
 

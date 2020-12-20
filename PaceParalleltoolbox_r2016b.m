@@ -478,9 +478,9 @@ elseif strcmp(currEnv,'PACEcluster')
 	else %currVer >=8.3
 		close_command = 'delete(gcp(''nocreate''));';
 	end
-	if interActiv
-		fprintf('To close this matlab pool, run: "%s".\n',close_command)
-	end
+% 	if interActiv
+% 		fprintf('To close this matlab pool, run: "%s".\n',close_command)
+% 	end
 	
 	function debugMatlab(currEnv) %Error Checking Function
         if strcmp(currEnv,'PACEcluster')

@@ -1,5 +1,6 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function  StateVariableUpdate(PROP,UPDATE)
 % This function calculates the global stiffness matrix for the desired 
@@ -39,6 +40,8 @@ for iElem = 1:size(CONNEC,1)
                       (1+xi)*(1+eta) (1-xi)*(1+eta)];
 %             N  = 1/4*[(1+xi)*(1+eta) (1-xi)*(1+eta) ...                    % Shape functions
 %                       (1-xi)*(1-eta) (1+xi)*(1-eta)];
+            
+          %[gp,gw] = gauss(2,'QUAD');
 
             [Nxy, detJ] = Shape_Function(xi, eta, xyz);                     % Derivative of shape functions with respect to x/y;  Determinant of the Jacobian             
             Bu = [Nxy(1,1)   0          Nxy(1,2)   0          Nxy(1,3)   0          Nxy(1,4)   0;...
@@ -55,9 +58,13 @@ for iElem = 1:size(CONNEC,1)
             K = HydroConductivity_tan_update(PROP);
             velocityN = -K*Nxy*ELEPORP;
             GPporepressure = N*ELEPORP;
-
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
@@ -68,6 +75,7 @@ for iElem = 1:size(CONNEC,1)
             % one increment
             if UPDATE
                 %%%%%%
+                STATEV{iElem}{i}.volume = detJ*W*PROP.plane_thickness;
                 STATEV{iElem}{i}.sigma = stressN;
                 STATEV{iElem}{i}.damage = damageN;
                 STATEV{iElem}{i}.strain = strainN;
@@ -87,7 +95,7 @@ for iElem = 1:size(CONNEC,1)
             W = STATEV{iElem}{i}.gauss_weight;                              % Gauss weights               
             xi = gp(1,1); eta = gp(2,1);                                % Gauss points
             
-            [Nxy, ~] = Shape_Function(xi, eta, xyz);                 % Determinant of the Jacobian and the derivative of shape functions with respect to x/y                                 
+            [Nxy, detJ] = Shape_Function(xi, eta, xyz);                 % Determinant of the Jacobian and the derivative of shape functions with respect to x/y                                 
 
             N  = 1/4*[(1-xi)*(1-eta) (1+xi)*(1-eta) ...                     % Shape functions
                       (1+xi)*(1+eta) (1-xi)*(1+eta)];
@@ -103,10 +111,11 @@ for iElem = 1:size(CONNEC,1)
             R_weight = 0;
             for iN = 1:4
                 if NN(iN,2) ~= 0
-                    psi1 = PSI(N1);                                         % Psi level set value at node 1
-                    psi2 = PSI(N2);                                         % Psi level set value at node 2
-                    psi3 = PSI(N3);                                         % Psi level set value at node 3
-                    psi4 = PSI(N4);                                         % Psi level set value at node 4
+                    icrack = NN(iN,4);
+                    psi1 = PSI{icrack}(N1);                                         % Psi level set value at node 1
+                    psi2 = PSI{icrack}(N2);                                         % Psi level set value at node 2
+                    psi3 = PSI{icrack}(N3);                                         % Psi level set value at node 3
+                    psi4 = PSI{icrack}(N4);                                         % Psi level set value at node 4
                     psi  = N(1)*psi1+N(2)*psi2+N(3)*psi3+N(4)*psi4;         % Psi level set value at current gauss point
     
                     Hgp = sign(psi);                                        % Heaviside value at current gauss point
@@ -116,7 +125,7 @@ for iElem = 1:size(CONNEC,1)
                     R_weight = R_weight + N(iN);
                     
                     Hgp = abs(psi);                                        % Heaviside value at current gauss point
-                    Hi  = abs(PSI(NN(iN,1)));                              % Nodal Heaviside value
+                    Hi  = abs(PSI{icrack}(NN(iN,1)));                              % Nodal Heaviside value
                     D   = (Hgp-Hi);                                        % Shifted distance value
 
                     Benru(:,(2*index-1):(2*index)) = [Nxy(1,iN)*H    0;
@@ -148,8 +157,12 @@ for iElem = 1:size(CONNEC,1)
             velocityN = -K*Bp*ELEPORP;
             GPporepressure = Nen*ELEPORP;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
@@ -158,6 +171,7 @@ for iElem = 1:size(CONNEC,1)
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
                 %%%%%%
+                STATEV{iElem}{i}.volume = detJ*W*PROP.plane_thickness;
                 STATEV{iElem}{i}.sigma = stressN;
                 STATEV{iElem}{i}.damage = damageN;
                 STATEV{iElem}{i}.strain = strainN;
@@ -174,16 +188,15 @@ for iElem = 1:size(CONNEC,1)
         if ( numel(PSI) == 0 )
             PN = [0 0 0 0]; 
         else
-            PN = [ PSI(N1)  PSI(N2)  PSI(N3)  PSI(N4)];                 % Nodal crack level set values
+            PN = [ PSI{NN(1,4)}(N1)  PSI{NN(2,4)}(N2)  PSI{NN(3,4)}(N3)  PSI{NN(4,4)}(N4)];                 % Nodal crack level set values
         end
-        [~,~,J] = subDomain(3,PN,xyz);                                  % Full Heaviside enrichment
+        [~,W,J] = subDomain(3,PN,xyz);                                  % Full Heaviside enrichment
 
         Ngp = size(STATEV{iElem},2);
         
-
         for i = 1:Ngp
             gp = STATEV{iElem}{i}.natural_coodinates;                    % Gauss points
-            W = STATEV{iElem}{i}.gauss_weight;                           % Gauss weights               
+%             W = STATEV{iElem}{i}.gauss_weight;                           % Gauss weights               
             xi = gp(1,1); eta = gp(2,1);                                 % Gauss points
             
             Ji   = [J(i,1) J(i,2);J(i,3) J(i,4)];                        % Jacobian of subdomain
@@ -203,10 +216,11 @@ for iElem = 1:size(CONNEC,1)
             R_weight = 0;
             for iN = 1:4
                 if NN(iN,2) ~= 0
-                    psi1 = PSI(N1);                                         % Psi level set value at node 1
-                    psi2 = PSI(N2);                                         % Psi level set value at node 2
-                    psi3 = PSI(N3);                                         % Psi level set value at node 3
-                    psi4 = PSI(N4);                                         % Psi level set value at node 4
+                    icrack = NN(iN,4);
+                    psi1 = PSI{icrack}(N1);                                         % Psi level set value at node 1
+                    psi2 = PSI{icrack}(N2);                                         % Psi level set value at node 2
+                    psi3 = PSI{icrack}(N3);                                         % Psi level set value at node 3
+                    psi4 = PSI{icrack}(N4);                                         % Psi level set value at node 4
                     psi  = N(1)*psi1+N(2)*psi2+N(3)*psi3+N(4)*psi4;         % Psi level set value at current gauss point
     
                     Hgp = sign(psi);                                        % Heaviside value at current gauss point
@@ -216,7 +230,7 @@ for iElem = 1:size(CONNEC,1)
                     R_weight = R_weight + N(iN);
                     
                     Hgp = abs(psi);                                        % Heaviside value at current gauss point
-                    Hi  = abs(PSI(NN(iN,1)));                                         % Nodal Heaviside value
+                    Hi  = abs(PSI{icrack}(NN(iN,1)));                                         % Nodal Heaviside value
                     D   = (Hgp-Hi);                                           % Shifted distance value
 
                     Benru(:,(2*index-1):(2*index)) = [Nxy(1,iN)*H    0;
@@ -248,8 +262,12 @@ for iElem = 1:size(CONNEC,1)
             velocityN = -K*Bp*ELEPORP;
             GPporepressure = Nen*ELEPORP;
             
-            nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
-            [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            if PROP.nonlocal
+                nonlocal_table = STATEV{iElem}{i}.nonlocalTable;
+                [NLEquivStrain,~] = computeNonlocalEquivalentStrain( nonlocal_table );
+            else
+                NLEquivStrain = computeEquivalentStrain(strainN);
+            end
             
             Damage = STATEV{iElem}{i}.damage;
             Kappa = STATEV{iElem}{i}.kappa;
@@ -258,6 +276,7 @@ for iElem = 1:size(CONNEC,1)
             % Update plastic variables once convergence is reached within one increment
             if UPDATE
                 %%%%%%
+                STATEV{iElem}{i}.volume = detJ*W(i)*PROP.plane_thickness;
                 STATEV{iElem}{i}.sigma = stressN;
                 STATEV{iElem}{i}.damage = damageN;
                 STATEV{iElem}{i}.strain = strainN;
@@ -268,32 +287,38 @@ for iElem = 1:size(CONNEC,1)
             end
         end
         
-        I_frac = find( connec_frac(:,1) == iElem );
+        for icrack = 1:size(connec_frac,1)
+            I_frac = find( connec_frac{icrack}(:,1) == iElem );
+            if ~isempty(I_frac)
+                break;
+            end
+        end
+       
+%         I_frac = find( connec_frac(:,1) == iElem );
         
-        N1_frac  = connec_frac(I_frac,2);                                              % Node 1 for current fracture segment
-        N2_frac  = connec_frac(I_frac,3);                                              % Node 2 for current fracture segment
+        N1_frac  = connec_frac{icrack}(I_frac,2);                                              % Node 1 for current fracture segment
+        N2_frac  = connec_frac{icrack}(I_frac,3);                                              % Node 2 for current fracture segment
         
-        X1_frac = xyz_frac(N1_frac,4);
-        X2_frac = xyz_frac(N2_frac,4);
+%         X1_frac = xyz_frac{icrack}(N1_frac,4);
+%         X2_frac = xyz_frac{icrack}(N2_frac,4);
         
-        tan_frac = xyz_frac(N2_frac,2:3) - xyz_frac(N1_frac,2:3);
+        tan_frac = xyz_frac{icrack}(N2_frac,2:3) - xyz_frac{icrack}(N1_frac,2:3);
         tan_frac = tan_frac./sqrt(sum(tan_frac.^2));
         norm_frac = [-tan_frac(2) tan_frac(1)];
         
         lambda = [tan_frac; norm_frac];
         
-%         local_frac  = [xyz_frac(N1_frac,1) xyz_frac(N2_frac,1)];            % Traditional index locations
+%         local_frac  = [xyz_frac{icrack}(N1_frac,1) xyz_frac{icrack}(N2_frac,1)];            % Traditional index locations
         localD_enr  = localD(1,9:16);
         
-        Ngp = size(statev_frac{I_frac},2);
+        Ngp = size(statev_frac{icrack}{I_frac},2);
         
         for ig = 1:Ngp
-
-%             gp_frac = statev_frac{I_frac}{ig}.natural_coodinates;            % Gauss points
-            gp_ele = statev_frac{I_frac}{ig}.natural_coordinate_ele;            % Gauss points
-%             W = statev_frac{I_frac}{ig}.gauss_weight;                        % Gauss weights
-%             czmlength = statev_frac{I_frac}{ig}.seglength;  
-            histo_jump = statev_frac{I_frac}{ig}.jump;
+%             gp_frac = statev_frac{icrack}{I_frac}{ig}.natural_coodinates;            % Gauss points
+            gp_ele = statev_frac{icrack}{I_frac}{ig}.natural_coordinate_ele;            % Gauss points
+%             W = statev_frac{icrack}{I_frac}{ig}.gauss_weight;                        % Gauss weights
+%             czmlength = statev_frac{icrack}{I_frac}{ig}.seglength;  
+            histo_jump = statev_frac{icrack}{I_frac}{ig}.jump;
             
             xi = gp_ele(1,1); eta = gp_ele(2,1);                                % Gauss points
             
@@ -316,7 +341,7 @@ for iElem = 1:size(CONNEC,1)
 % 
 %                 R_weight = R_weight + N(iN);
 %                     
-%                 Hi  = abs(PSI(NN(iN,1)));                                         % Nodal Heaviside value
+%                 Hi  = abs(PSI{icrack}(NN(iN,1)));                                         % Nodal Heaviside value
 %                 D   = (0-Hi);                                           % Shifted distance value
 % 
 % %                 Benru(:,(2*index-1):(2*index)) = [Nxy(1,iN)*H    0;
@@ -345,8 +370,8 @@ for iElem = 1:size(CONNEC,1)
             
             if UPDATE
                 %%%%%%
-                statev_frac{I_frac}{ig}.width = fracwidth;
-                statev_frac{I_frac}{ig}.jump = new_jump;
+                statev_frac{icrack}{I_frac}{ig}.width = fracwidth;
+                statev_frac{icrack}{I_frac}{ig}.jump = new_jump;
                 continue;
             end
            
@@ -358,7 +383,7 @@ end
 
 end
 
-function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,kappa,Damage,GPporepressure)
+function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,NLEquivStrain,strainN,kappa,Damage,GPporepressure)
 % Inputs:
 % PROP = [E0, nu0, epsilon_0, epsilon_f];
 % D = 4*4 elastic stiffness matrix
@@ -366,58 +391,35 @@ function [stressN, DamageN, kappaN]=Gauss_sig_update(PROP,EquivStrain,strainN,ka
 % strain = [e11, e22, 2*e12, e33];
 % Plane strain problem e33=0
 %%
-    E11  = PROP.E11;
-    E22  = PROP.E22;
-    nu12 = PROP.nu12;
-    nu21 = nu12*E11/E22;
-    nu23 = PROP.nu23;
-    G12 = PROP.G12;
 
-    eqeps_1t = PROP.eqeps_1t;
-    eqeps_2t = PROP.eqeps_2t;
- 
-    alpha_1t = PROP.alpha_1t;
-    alpha_2t = PROP.alpha_2t;
-    
-    if ( EquivStrain(1) > kappa(1) )
-        Damage(1) = 1-exp(-(EquivStrain(1) - eqeps_1t)/alpha_1t);
-        kappa(1) = EquivStrain(1);
+    if ( NLEquivStrain > kappa )
+        kappa = NLEquivStrain;
+        Damage = 1-PROP.eps_cr/kappa*exp(-PROP.B*(kappa - PROP.eps_cr));
     end
-    if ( EquivStrain(2) > kappa(2) )
-        Damage(2) = 1-exp(-(EquivStrain(2) - eqeps_2t)/alpha_2t);
-        kappa(2) = EquivStrain(2);
-    end
-    
+
     DamageN = Damage;
     kappaN = kappa;
     
-    omega1 = DamageN(1);
-    omega2 = DamageN(2);
-    
-%     omega1 = 0;
-%     omega2 = 0;
-    
     MATC=zeros(4,4);
 
-    nu21=E22*nu12/E11;
-    D= (1-omega2)*nu23^2+2*(1-omega1)*(1-omega2)*nu12*nu21*nu23+(1-omega1)*(2-omega2)*nu12*nu21-1;
-    MATC(1,1)=E11*(1-omega1)*((1-omega2)*nu23^2-1)/D;
-    MATC(1,2)=-E11*nu21*(1-omega1)*(1-omega2)*(1+nu23)/D;
-    MATC(1,3)=-E11*nu21*(1-omega1)*(1+(1-omega2)*nu23)/D;
+    D= (1-DamageN)*PROP.E/(1+PROP.nu)/(1-2*PROP.nu);
+    MATC(1,1)=(1-PROP.nu)*D;
+    MATC(1,2)=PROP.nu*D;
+    MATC(1,3)=PROP.nu*D;
     MATC(1,4)=0;
-    MATC(2,1)=MATC(1,2);
-    MATC(2,2)=E22*(1-omega2)*((1-omega1)*nu12*nu21-1)/D;
-    MATC(2,3)=-E22*(1-omega2)*(nu23+(1-omega1)*nu12*nu21)/D;
+    MATC(2,1)=PROP.nu*D;
+    MATC(2,2)=(1-PROP.nu)*D;
+    MATC(2,3)=PROP.nu*D;
     MATC(2,4)=0;
-    MATC(3,1)=MATC(1,3);
-    MATC(3,2)=MATC(2,3);
-    MATC(3,3)=E22*(1-omega2)*(1-omega1)*(nu12*nu21-1)/D;
+    MATC(3,1)=PROP.nu*D;
+    MATC(3,2)=PROP.nu*D;
+    MATC(3,3)=(1-PROP.nu)*D;
     MATC(3,4)=0;
     MATC(4,1)=0;
     MATC(4,2)=0;
     MATC(4,3)=0;
-    MATC(4,4)=G12*(1-omega1)*(1-omega2);
-    
+    MATC(4,4)=(1-2*PROP.nu)/2*D;
+
     alpha = BiotCoefficient_tan_update(PROP);
 
     stressN = MATC*[strainN(1:3,1); 2*strainN(4,1)] - [alpha(1);alpha(2);alpha(1);alpha(3)]* GPporepressure;    %updated stress
@@ -429,7 +431,7 @@ function [nonlocal_equ_eps,scale] = computeNonlocalEquivalentStrain( nonlocal_ta
 
     global  STATEV
 
-    nonlocal_equ_eps = [0; 0;];
+    nonlocal_equ_eps = 0;
     scale = 0;
 
     for i = 1:size(nonlocal_table,1)
@@ -544,4 +546,9 @@ function [K] = HydroConductivity_tan_update(PROP)
 
 end
 
-
+function [EquivStrain] = computeEquivalentStrain( strain)
+    %%
+        [~,strain_principal]= eigs([strain(1,1) strain(4,1); strain(4,1) strain(2,1)]);
+        EquivStrain = sqrt((strain_principal(1,1)+abs(strain_principal(1,1))/2)^2+...
+                           (strain_principal(2,2)+abs(strain_principal(2,2))/2)^2);   
+end

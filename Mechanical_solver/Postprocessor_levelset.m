@@ -45,21 +45,18 @@ fprintf(fid, ' </Cells>\n');
 % fprintf(fid, '<PointData Scalars="LS_psi LS_phi " Vectors="DisplacementVector " Tensors="StressTensor DamageTensor " >\n');
 % fprintf(fid, '<PointData Scalars="LS_psi LS_phi" Vectors="DisplacementVector StressTensor DamageTensor EquivalentStrain">\n');
 fprintf(fid, '<PointData Scalars="LS_psi LS_phi" Vectors="Displacement Stress Strain Damage NLEquivalentStrain">\n');
-for icrack = 1:size(PHI,1)
-    psi = full(PSI{icrack});
-    phi = full(PHI{icrack});
-    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_psi" NumberOfComponents="1" format="ascii">\n', icrack);
-    for i = 1:npoints
-        fprintf(fid, '  %8.6e', psi(i));
-    end 
-    fprintf(fid, ' </DataArray>\n');
-    fprintf(fid, '<DataArray type="Float64" Name="LS_%d_phi" NumberOfComponents="1" format="ascii">\n', icrack);
-    for i = 1:npoints
-        fprintf(fid, '  %8.6e', phi(i));
-    end 
-    fprintf(fid, ' </DataArray>\n');
-end
-
+psi = full(PSI);
+phi = full(PHI);
+fprintf(fid, '<DataArray type="Float64" Name="LS_%d_psi" NumberOfComponents="1" format="ascii">\n', 1);
+for i = 1:npoints
+    fprintf(fid, '  %8.6e', psi(i));
+end 
+fprintf(fid, ' </DataArray>\n');
+fprintf(fid, '<DataArray type="Float64" Name="LS_%d_phi" NumberOfComponents="1" format="ascii">\n', 1);
+for i = 1:npoints
+    fprintf(fid, '  %8.6e', phi(i));
+end 
+fprintf(fid, ' </DataArray>\n');
 fprintf(fid, '</PointData>\n');
 % fprintf(fid, '<CellData Scalars="" Vectors="" Tensors="" >\n');
 % fprintf(fid, '</CellData>\n');

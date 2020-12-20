@@ -1,27 +1,25 @@
-% Written By: Wencheng Jin, Georgia Institute of Technology (2018)
-% Email: wencheng.jin@gatech.edu
+% Written By: Wencheng Jin, Idaho National Laboratory (2020)
+% Website: https://sites.google.com/view/wenchengjin/software
+% Email: wencheng.jin@inl.gov
 
 function  buildNonlocalTable(PROP)
 % This function is try to build the nonlocal gauss point table 
 
-t1=clock;
-
-global CONNEC STATEV XYZ CRACK PSI
-
-  nPt    = size(CRACK,1);
-
+  t1=clock;
+  global CONNEC STATEV XYZ CRACK PSI
+  nCrack = size(CRACK,1);
   NE = size(CONNEC,1);
-  
   internalLength = PROP.internal_length;
-
   constant_c = pi*internalLength^2/3;
-  
   for iElem = 1:NE
       Node = CONNEC(iElem,2:5);
-      psi = PSI(Node);
       nearCrack = false;
-      if (nnz(psi)==4  && abs(mean(psi)) <= internalLength)
-          nearCrack = true;
+      for icrack=1:nCrack
+          psi = PSI{icrack}(Node);
+          if (nnz(psi)==4  && abs(mean(psi)) <= internalLength)
+              nearCrack = true;
+              break;
+          end
       end
       xyz = XYZ(Node,2:3);
       element_center = sum(xyz)./4;
@@ -47,18 +45,21 @@ global CONNEC STATEV XYZ CRACK PSI
                     if length <= internalLength
                         if nearCrack
                             cross = false;
-                            for ipt=1:nPt-1
-                                C = CRACK(ipt,:)';
-                                D = CRACK(ipt+1,:)';
-                                CD = D-C;
-                                AC = C - local_coordintes;
-                                AD = D - local_coordintes;
-                                CA = neighbor_coordintes - C;
-                                CB = local_coordintes - C;
-                                if (AB(1)*AC(2)-AB(2)*AC(1))*(AB(1)*AD(2)-AB(2)*AD(1)) < 0
-                                    if (CD(1)*CA(2)-CD(2)*CA(1))*(CD(1)*CB(2)-CD(2)*CB(1)) < 0
-                                        cross = true;
-                                        break;
+                            for icrack=1:nCrack 
+                                nPt    = size(CRACK{icrack},1);
+                                for ipt=1:nPt-1
+                                    C = CRACK{icrack}(ipt,:)';
+                                    D = CRACK{icrack}(ipt+1,:)';
+                                    CD = D-C;
+                                    AC = C - local_coordintes;
+                                    AD = D - local_coordintes;
+                                    CA = neighbor_coordintes - C;
+                                    CB = local_coordintes - C;
+                                    if (AB(1)*AC(2)-AB(2)*AC(1))*(AB(1)*AD(2)-AB(2)*AD(1)) < 0
+                                        if (CD(1)*CA(2)-CD(2)*CA(1))*(CD(1)*CB(2)-CD(2)*CB(1)) < 0
+                                            cross = true;
+                                            break;
+                                        end
                                     end
                                 end
                             end

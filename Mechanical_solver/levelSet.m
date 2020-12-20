@@ -45,14 +45,14 @@ if isempty(CRACK) == 0
         crack_len = crack_len + sqrt((CRACK(i-1,1)-CRACK(i,1))^2+(CRACK(i-1,2)-CRACK(i,2))^2);
     end
                                                     % search radius
-    Distance2Tip = sqrt( (XYZ(:,2)-CRACK(nPt,1)).^2 + (XYZ(:,3)-CRACK(nPt,2)).^2);
-    [~,I] = min(Distance2Tip);
-    [~,~,c1] = intersect(I,CONNEC(:,2)');
-    TipElementNodes = CONNEC(c1(1),:);
-    elementSize = sqrt( (XYZ(TipElementNodes(2),2)-XYZ(TipElementNodes(4),2))^2 + (XYZ(TipElementNodes(2),3)-XYZ(TipElementNodes(4),3)).^2);
-    radius = crack_len+3*elementSize;
+%     Distance2Tip = sqrt( (XYZ(:,2)-CRACK(nPt,1)).^2 + (XYZ(:,3)-CRACK(nPt,2)).^2);
+%     [~,I] = min(Distance2Tip);
+%     [~,~,c1] = intersect(I,CONNEC(:,2)');
+%     TipElementNodes = CONNEC(c1(1),:);
+%     elementSize = sqrt( (XYZ(TipElementNodes(2),2)-XYZ(TipElementNodes(4),2))^2 + (XYZ(TipElementNodes(2),3)-XYZ(TipElementNodes(4),3)).^2);
+%     radius = crack_len+3*elementSize;
     
-%     radius =  crack_len;
+    radius =  crack_len;
        
     dist = zeros(1,nNode);                                                  % Initialize distance vector
     xCT    = segcenter(1,1);                                                % X-coordinate of crack center
@@ -121,8 +121,7 @@ if isempty(CRACK) == 0
             if psi == 0, psi = 1e-6; end    
             PHI(cNode,1) = phi(1);
             PSI(cNode,1) = psi;
-            
-            
+                      
         elseif ( nCT == 2 )
             % Define phi for first crack tip
             disc = CRACK(nPt,:)-CRACK(nPt-1,:);                             % Horizontal and vertical distances for current crack segment
@@ -222,5 +221,7 @@ end
         NODES(hNodes(i),2) = nNode;
         nNode = nNode+1;
     end
+    
+    Postprocessor_levelset();
 
 end
